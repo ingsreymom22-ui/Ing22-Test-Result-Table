@@ -1,0 +1,74 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global catch-all default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation for Level
+    function isValidLevel(data) {
+      return data.keys().hasAll(['name', 'subjects']) 
+        && data.name is string && data.name.size() <= 100
+        && data.subjects is list && data.subjects.size() <= 100;
+    }
+
+    // Validation for ClassRecord
+    function isValidClassRecord(data) {
+      return data.keys().hasAll(['termName', 'className', 'teacherName', 'levelId', 'students'])
+        && data.termName is string && data.termName.size() <= 100
+        && data.className is string && data.className.size() <= 100
+        && data.teacherName is string && data.teacherName.size() <= 100
+        && data.levelId is string && data.levelId.size() <= 128
+        && data.students is list && data.students.size() <= 500;
+    }
+
+    match /users/{userId} {
+      match /levels/{levelId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) 
+          && isValidId(levelId)
+          && isValidLevel(incoming());
+        allow update: if isOwner(userId)
+          && isValidId(levelId)
+          && isValidLevel(incoming());
+        allow delete: if isOwner(userId)
+          && isValidId(levelId);
+      }
+
+      match /classes/{classId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(classId)
+          && isValidClassRecord(incoming());
+        allow update: if isOwner(userId)
+          && isValidId(classId)
+          && isValidClassRecord(incoming());
+        allow delete: if isOwner(userId)
+          && isValidId(classId);
+      }
+    }
+  }
+}

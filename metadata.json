@@ -1,0 +1,8 @@
+{
+  "name": "Teacher Grade Calculator",
+  "description": "An online tool for teachers to calculate student performance across Mid-Tests, Final-Tests, Quizzes, Assignments, and Termly Final Results.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "Level": {
+      "title": "Level",
+      "description": "Grading structure for a specific level.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "subjects": { "type": "array" }
+      }
+    },
+    "ClassRecord": {
+      "title": "Class Record",
+      "description": "A class record with students and grades.",
+      "type": "object",
+      "properties": {
+        "termName": { "type": "string" },
+        "className": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "levelId": { "type": "string" },
+        "students": { "type": "array" },
+        "isPinned": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}/levels/{levelId}": {
+      "schema": { "$ref": "#/entities/Level" },
+      "description": "User's customized levels"
+    },
+    "/users/{userId}/classes/{classId}": {
+      "schema": { "$ref": "#/entities/ClassRecord" },
+      "description": "User's class records"
+    }
+  }
+}
