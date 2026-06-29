@@ -70,5 +70,11 @@ service cloud.firestore {
           && isValidId(classId);
       }
     }
+
+    match /templates/{templateId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
+    }
   }
 }

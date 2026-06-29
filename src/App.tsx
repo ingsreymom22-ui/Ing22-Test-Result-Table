@@ -49,6 +49,7 @@ export default function App() {
     const unsubLevels = subscribeToLevels(user.uid, (fetchedLevels) => {
       if (fetchedLevels.length === 0) {
         // Initialize default levels for new users
+        setLevels(DEFAULT_LEVELS);
         DEFAULT_LEVELS.forEach(l => saveLevel(user.uid, l));
       } else {
         setLevels(fetchedLevels);

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Save, Copy, FileText, Database } from 'lucide-react';
-import { Level } from '../types';
+import { Level, Subject } from '../types';
 import LevelSettings from './LevelSettings';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { collection, doc, setDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 
 interface Props {
   level: Level;
@@ -14,17 +14,103 @@ interface Props {
   onClose: () => void;
 }
 
+const TEMPLATE_100_PERCENT: Subject[] = [
+  {
+    id: 's1',
+    name: 'Listening',
+    categories: [
+      { id: 'c1', name: 'Quizzes', weight: 5, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] },
+      { id: 'c2', name: 'Assignment', weight: 5, itemCount: 1, itemMaxScores: [100] },
+      { id: 'c3', name: 'Class Participation', weight: 5, itemCount: 1, itemMaxScores: [100] },
+      { id: 'c4', name: 'Homework', weight: 10, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] }
+    ]
+  },
+  {
+    id: 's2',
+    name: 'Reading',
+    categories: [
+      { id: 'c1', name: 'Quizzes', weight: 5, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] },
+      { id: 'c2', name: 'Assignment', weight: 5, itemCount: 1, itemMaxScores: [100] },
+      { id: 'c3', name: 'Class Participation', weight: 5, itemCount: 1, itemMaxScores: [100] },
+      { id: 'c4', name: 'Homework', weight: 10, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] }
+    ]
+  },
+  {
+    id: 's3',
+    name: 'Grammar',
+    categories: [
+      { id: 'c1', name: 'Quizzes', weight: 5, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] },
+      { id: 'c2', name: 'Assignment', weight: 5, itemCount: 1, itemMaxScores: [100] },
+      { id: 'c3', name: 'Class Participation', weight: 5, itemCount: 1, itemMaxScores: [100] },
+      { id: 'c4', name: 'Homework', weight: 10, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] }
+    ]
+  },
+  {
+    id: 's4',
+    name: 'Vocabulary',
+    categories: [
+      { id: 'c1', name: 'Quizzes', weight: 5, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] },
+      { id: 'c2', name: 'Assignment', weight: 5, itemCount: 1, itemMaxScores: [100] },
+      { id: 'c3', name: 'Class Participation', weight: 5, itemCount: 1, itemMaxScores: [100] },
+      { id: 'c4', name: 'Homework', weight: 10, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] }
+    ]
+  }
+];
+
 export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceLevels, onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<'level' | 'appearance' | 'account'>('level');
+  const [activeTab, setActiveTab] = useState<'level' | 'templates' | 'appearance' | 'account'>('level');
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authError, setAuthError] = useState('');
+  const [savedTemplates, setSavedTemplates] = useState<{id: string, name: string, authorName: string, levels: Level[]}[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      fetchTemplates();
     });
     return () => unsubscribe();
   }, []);
+
+  const fetchTemplates = async () => {
+    try {
+      // Fetch globally shared templates
+      const querySnapshot = await getDocs(collection(db, `templates`));
+      const templates: any[] = [];
+      querySnapshot.forEach((doc) => {
+        templates.push({ id: doc.id, ...doc.data() });
+      });
+      setSavedTemplates(templates);
+    } catch (e) {
+      console.error("Error fetching templates:", e);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!user) return;
+    const templateName = prompt("Enter template name (e.g., 'Foundation Term 1'):");
+    if (!templateName) return;
+    
+    try {
+      const templateId = Math.random().toString(36).substring(2, 9);
+      await setDoc(doc(db, `templates`, templateId), {
+        name: templateName,
+        authorId: user.uid,
+        authorName: user.displayName || user.email || 'Teacher',
+        levels: levels
+      });
+      fetchTemplates();
+    } catch (e) {
+      console.error("Error saving template:", e);
+      alert("Failed to save template. Make sure you are signed in.");
+    }
+  };
+
+  const handleLoadTemplate = (templateLevels: Level[]) => {
+    if (confirm("This will replace all your current levels with the template. Are you sure?")) {
+      onReplaceLevels(templateLevels);
+      alert("Template applied to all levels!");
+    }
+  };
 
   const handleGoogleLogin = async () => {
     try {
@@ -38,6 +124,64 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
     await signOut(auth);
   };
 
+  const handleRenameTemplate = async (templateId: string, authorId: string, currentName: string) => {
+    if (!user || user.uid !== authorId) return;
+    const newName = prompt("Enter new name for this template:", currentName);
+    if (!newName || newName === currentName) return;
+    
+    try {
+      await updateDoc(doc(db, `templates`, templateId), {
+        name: newName
+      });
+      fetchTemplates();
+    } catch (e) {
+      console.error("Error renaming template:", e);
+      alert("Failed to rename template.");
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string, authorId: string) => {
+    if (!user || user.uid !== authorId) return;
+    if (confirm("Are you sure you want to delete this template from the community library?")) {
+      try {
+        await deleteDoc(doc(db, `templates`, templateId));
+        fetchTemplates();
+      } catch (e) {
+        console.error("Error deleting template:", e);
+        alert("Failed to delete template.");
+      }
+    }
+  };
+
+  const handleDuplicateTemplate = async (template: {id: string, name: string, authorName: string, levels: Level[]}) => {
+    if (!user) {
+      alert("Please sign in to duplicate templates.");
+      return;
+    }
+    
+    try {
+      const templateId = Math.random().toString(36).substring(2, 9);
+      await setDoc(doc(db, `templates`, templateId), {
+        name: template.name + ' (Copy)',
+        authorId: user.uid,
+        authorName: user.displayName || user.email || 'Teacher',
+        levels: template.levels
+      });
+      fetchTemplates();
+      alert("Template duplicated successfully!");
+    } catch (e) {
+      console.error("Error duplicating template:", e);
+      alert("Failed to duplicate template.");
+    }
+  };
+
+  const applyTemplateToCurrent = () => {
+    if (confirm("This will replace the current level's subjects. Continue?")) {
+      onUpdateLevel({ ...level, subjects: JSON.parse(JSON.stringify(TEMPLATE_100_PERCENT)) });
+      alert("Template applied to current level!");
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -48,6 +192,12 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
             onClick={() => setActiveTab('level')}
           >
             Current Level
+          </button>
+          <button
+            className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'templates' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            onClick={() => setActiveTab('templates')}
+          >
+            Templates & Sync
           </button>
           <button
             className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'appearance' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -72,6 +222,99 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
              <div className="p-6">
                 <LevelSettings level={level} onUpdateLevel={onUpdateLevel} onClose={() => {}} hideHeader={true} />
              </div>
+          )}
+
+          {activeTab === 'templates' && (
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-800">Templates Library</h2>
+                  <p className="text-sm text-slate-500">Save your full level structures to the community library, or load existing ones.</p>
+                </div>
+                {user ? (
+                  <button onClick={handleSaveTemplate} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                    <Save className="w-4 h-4" />
+                    Save My Levels as Template
+                  </button>
+                ) : (
+                  <button onClick={() => setActiveTab('account')} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium border border-slate-200">
+                    <User className="w-4 h-4" />
+                    Sign In to Save Templates
+                  </button>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {savedTemplates.map(template => (
+                  <div key={template.id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="p-3 bg-purple-50 rounded-xl shrink-0">
+                        <FileText className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-slate-800 text-lg line-clamp-1" title={template.name}>{template.name}</h4>
+                        <p className="text-sm text-slate-500 mt-1">{template.levels.length} levels configured</p>
+                        <p className="text-xs text-slate-400 mt-1">By {template.authorName || 'Teacher'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleLoadTemplate(template.levels)}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          <Copy className="w-4 h-4" /> Load
+                        </button>
+                        <button 
+                          onClick={() => handleDuplicateTemplate(template)}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                          title="Duplicate to Library"
+                        >
+                          <Copy className="w-4 h-4" /> Duplicate
+                        </button>
+                      </div>
+                      
+                      {user && user.uid === (template as any).authorId && (
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleRenameTemplate(template.id, (template as any).authorId, template.name)}
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                          >
+                            Rename
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteTemplate(template.id, (template as any).authorId)}
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="p-3 bg-blue-50 rounded-xl shrink-0">
+                      <FileText className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-800 text-lg">Standard 100% Template</h4>
+                      <p className="text-sm text-slate-500 mt-1">Listening (25%), Reading (25%), Grammar (25%), Vocabulary (25%). Each with Quizzes, Assignment, Participation, and Homework.</p>
+                    </div>
+                  </div>
+                  <div className="mt-auto pt-4 border-t border-slate-100">
+                    <button 
+                      onClick={applyTemplateToCurrent}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+                    >
+                      <Copy className="w-4 h-4" /> Apply to Current Level Only
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {activeTab === 'appearance' && (
