@@ -144,7 +144,7 @@ function generateExportData(currentRecord: ClassRecord, currentLevel: Level, res
       weightedSubjectSum += (subjectScorePercentage * subjectTargetWeight);
       totalSubjectWeight += subjectTargetWeight;
       
-      subjectAvgs[subject.name] = subjectPointsEarned.toFixed(1) + '%';
+      subjectAvgs[subject.name] = subjectScorePercentage.toFixed(1) + '%';
     });
     
     const finalScore = totalSubjectWeight > 0 ? (weightedSubjectSum / totalSubjectWeight) : 0;

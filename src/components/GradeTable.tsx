@@ -115,13 +115,11 @@ export default function GradeTable({ level, onUpdateLevel, students, onUpdateStu
       });
       subjectSpan += 1;
 
-      const catWeightSum = activeCategories.reduce((sum, c) => sum + c.weight, 0);
-
       itemCols.push({
         categoryId: `subj_avg_${subject.id}`,
         subjectId: subject.id,
         itemIndex: -3, // Special index for Subject average out of 100%
-        label: `${catWeightSum}%`,
+        label: '100%',
         maxScore: 100,
         isAvg: true,
         subjectIndex
@@ -182,14 +180,14 @@ export default function GradeTable({ level, onUpdateLevel, students, onUpdateStu
           }
           const categoryPercentage = categoryMax > 0 ? (categoryEarned / categoryMax) : 0;
           const pointsEarned = categoryPercentage * category.weight;
-          categoryAvgs[category.id] = categoryPercentage * 100;
+          categoryAvgs[category.id] = pointsEarned;
           
           subjectPointsEarned += pointsEarned;
           subjectCatWeightSum += category.weight;
         });
         
         const subjectScorePercentage = subjectCatWeightSum > 0 ? (subjectPointsEarned / subjectCatWeightSum) * 100 : 0;
-        subjectScores[subject.id] = subjectPointsEarned;
+        subjectScores[subject.id] = subjectScorePercentage;
 
         const subjectTargetWeight = subject.targetWeight !== undefined && subject.targetWeight > 0 
           ? subject.targetWeight 
