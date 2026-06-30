@@ -39,6 +39,11 @@ export default function LevelSettings({ level, onUpdateLevel, onClose, hideHeade
     onUpdateLevel({ ...level, subjects: newSubjects });
   };
 
+  const handleUpdateSubjectTarget = (subjectId: string, targetWeight: number) => {
+    const newSubjects = level.subjects.map(s => s.id === subjectId ? { ...s, targetWeight } : s);
+    onUpdateLevel({ ...level, subjects: newSubjects });
+  };
+
   const handleDeleteSubject = (subjectId: string) => {
     onUpdateLevel({ ...level, subjects: level.subjects.filter(s => s.id !== subjectId) });
   };
@@ -138,18 +143,38 @@ export default function LevelSettings({ level, onUpdateLevel, onClose, hideHeade
                   type="text"
                   value={subject.name}
                   onChange={(e) => handleUpdateSubjectName(subject.id, e.target.value)}
-                  className="flex-1 bg-transparent font-medium text-slate-800 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none px-1"
-                  placeholder="Subject Name (e.g., Listening)"
+                  className="flex-1 min-w-[120px] bg-transparent font-medium text-slate-800 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none px-1"
+                  placeholder="Subject Name"
                 />
-                <span className="text-sm font-medium text-slate-500 bg-slate-200 px-2.5 py-0.5 rounded-full">
-                  {subjectWeight}% Total
-                </span>
-                <button
-                  onClick={() => handleDeleteSubject(subject.id)}
-                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <span className="text-xs text-slate-500 hidden sm:inline">Target:</span>
+                  <div className="relative">
+                    <input 
+                      type="number"
+                      min="0"
+                      value={subject.targetWeight ?? ''}
+                      onChange={(e) => handleUpdateSubjectTarget(subject.id, Number(e.target.value))}
+                      className="w-16 bg-white border border-slate-300 rounded px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                      placeholder="e.g. 25"
+                    />
+                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-medium px-2 py-1 rounded-md whitespace-nowrap ${
+                    subject.targetWeight !== undefined && subjectWeight !== subject.targetWeight && subjectWeight !== 100
+                      ? 'bg-red-100 text-red-700 border border-red-200' 
+                      : 'bg-slate-200 text-slate-600'
+                  }`} title={subject.targetWeight !== undefined && subjectWeight !== subject.targetWeight && subjectWeight !== 100 ? 'Warning: Actual sum of categories does not match target weight (should equal target weight or 100%)' : 'Actual sum of categories'}>
+                    {subjectWeight}% Actual
+                  </span>
+                  <button
+                    onClick={() => handleDeleteSubject(subject.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {isExpanded && (

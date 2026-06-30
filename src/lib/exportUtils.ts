@@ -3,10 +3,25 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { ClassRecord, Level, calculateGrade } from '../types';
 
-export function exportToExcel(currentRecord: ClassRecord, currentLevel: Level) {
-  const data = generateExportData(currentRecord, currentLevel);
+export function exportToExcel(currentRecord: ClassRecord, currentLevel: Level, resultMode: 'full' | 'midterm' | 'final' = 'full') {
+  const data = generateExportData(currentRecord, currentLevel, resultMode);
   
-  const ws = utils.json_to_sheet(data);
+  const ws = utils.json_to_sheet([]);
+  
+  const modeLabel = resultMode === 'midterm' ? 'Mid-Term Results' : (resultMode === 'final' ? 'Final Test Results' : 'Full Term Results (Mid + Final)');
+
+  // Add rows at the top for headers/metadata
+  utils.sheet_add_aoa(ws, [
+    [`Class: ${currentRecord.className}`],
+    [`Term: ${currentRecord.termName}`],
+    [`Teacher: ${currentRecord.teacherName}`],
+    [`Level: ${currentLevel.name}`],
+    [`Report Period: ${modeLabel}`],
+    []
+  ], { origin: "A1" });
+
+  utils.sheet_add_json(ws, data, { origin: "A7", skipHeader: false });
+  
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, "Grades");
   
@@ -32,65 +47,79 @@ export function exportToExcel(currentRecord: ClassRecord, currentLevel: Level) {
 
   utils.sheet_add_aoa(ws, footerData, { origin: -1 });
 
-  writeFile(wb, `${currentRecord.className}_${currentRecord.termName}_Summary.xlsx`.replace(/\s+/g, '_'));
+  const fileSuffix = resultMode === 'midterm' ? 'Midterm' : (resultMode === 'final' ? 'Final_Test' : 'Full_Term');
+  writeFile(wb, `${currentRecord.className}_${currentRecord.termName}_${fileSuffix}_Summary.xlsx`.replace(/\s+/g, '_'));
 }
 
-export function exportToPDF(currentRecord: ClassRecord, currentLevel: Level) {
+export function exportToPDF(currentRecord: ClassRecord, currentLevel: Level, resultMode: 'full' | 'midterm' | 'final' = 'full') {
   const doc = new jsPDF('landscape');
-  const data = generateExportData(currentRecord, currentLevel);
+  const data = generateExportData(currentRecord, currentLevel, resultMode);
   
-  doc.setFontSize(18);
-  doc.text(`Class: ${currentRecord.className}`, 14, 20);
-  doc.setFontSize(12);
-  doc.text(`Term: ${currentRecord.termName} | Teacher: ${currentRecord.teacherName} | Level: ${currentLevel.name}`, 14, 28);
+  const modeLabel = resultMode === 'midterm' ? 'Mid-Term Results' : (resultMode === 'final' ? 'Final Test Results' : 'Full Term Results (Mid + Final)');
+
+  doc.setFontSize(16);
+  doc.text(`Class: ${currentRecord.className}`, 14, 18);
+  doc.setFontSize(10);
+  doc.text(`Term: ${currentRecord.termName} | Teacher: ${currentRecord.teacherName} | Level: ${currentLevel.name} | Period: ${modeLabel}`, 14, 25);
 
   const headers = Object.keys(data[0] || {});
   const rows = data.map(row => headers.map(h => row[h as keyof typeof row]));
 
   // @ts-ignore
   doc.autoTable({
-    startY: 35,
+    startY: 30,
     head: [headers],
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: [59, 130, 246] },
-    styles: { fontSize: 9, cellPadding: 3 },
+    styles: { fontSize: 8, cellPadding: 2.5 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
   });
 
   // @ts-ignore
   const finalY = doc.lastAutoTable.finalY || 40;
-  const footerY = finalY + 15;
+  const footerY = finalY + 12;
   
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.text("Abbreviations:", 14, footerY);
-  doc.text("Alphabet Dict.: Alphabet Dictation", 14, footerY + 5);
-  doc.text("Alphabet Recogn.: Alphabet Recognition", 14, footerY + 10);
-  doc.text("Alphabet Writ.: Alphabet Writing", 14, footerY + 15);
-  doc.text("Alphabet and W. Trac.: Alphabet and Word Tracing", 14, footerY + 20);
-  doc.text("Individual Speak.: Individual Speaking", 14, footerY + 25);
-  doc.text("Pair Conver.: Pair Conversation", 14, footerY + 30);
+  doc.text("Alphabet Dict.: Alphabet Dictation", 14, footerY + 4);
+  doc.text("Alphabet Recogn.: Alphabet Recognition", 14, footerY + 8);
+  doc.text("Alphabet Writ.: Alphabet Writing", 14, footerY + 12);
+  doc.text("Alphabet and W. Trac.: Alphabet and Word Tracing", 14, footerY + 16);
+  doc.text("Individual Speak.: Individual Speaking", 14, footerY + 20);
+  doc.text("Pair Conver.: Pair Conversation", 14, footerY + 24);
 
   const rightX = 220; 
   const today = new Date();
   const dateStr = `Date: Phnom Penh, ${today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   
   doc.text(dateStr, rightX, footerY);
-  doc.text("Academic Manager", rightX, footerY + 5);
-  doc.text("Sek Sokha", rightX, footerY + 25);
+  doc.text("Academic Manager", rightX, footerY + 4);
+  doc.text("Sek Sokha", rightX, footerY + 20);
 
-  doc.save(`${currentRecord.className}_${currentRecord.termName}_Summary.pdf`.replace(/\s+/g, '_'));
+  const fileSuffix = resultMode === 'midterm' ? 'Midterm' : (resultMode === 'final' ? 'Final_Test' : 'Full_Term');
+  doc.save(`${currentRecord.className}_${currentRecord.termName}_${fileSuffix}_Summary.pdf`.replace(/\s+/g, '_'));
 }
 
-function generateExportData(currentRecord: ClassRecord, currentLevel: Level) {
+function generateExportData(currentRecord: ClassRecord, currentLevel: Level, resultMode: 'full' | 'midterm' | 'final') {
   // Pre-calculate final scores and ranks
   const scores = currentRecord.students.map(student => {
-    let finalScore = 0;
+    let weightedSubjectSum = 0;
+    let totalSubjectWeight = 0;
     const subjectAvgs: Record<string, string> = {};
     
     currentLevel.subjects.forEach(subject => {
-      let subjectScore = 0;
-      subject.categories.forEach(category => {
+      let subjectPointsEarned = 0;
+      let subjectCatWeightSum = 0;
+      
+      const activeCategories = subject.categories.filter(category => {
+        const isFinal = category.name.toLowerCase().includes('final');
+        if (resultMode === 'midterm') return !isFinal;
+        if (resultMode === 'final') return isFinal;
+        return true;
+      });
+
+      activeCategories.forEach(category => {
         let categoryEarned = 0;
         let categoryMax = 0;
         for (let i = 0; i < category.itemCount; i++) {
@@ -100,13 +129,24 @@ function generateExportData(currentRecord: ClassRecord, currentLevel: Level) {
             categoryMax += (category.itemMaxScores?.[i] || 100);
           }
         }
-        const categoryPercentage = categoryMax > 0 ? (categoryEarned / categoryMax) * 100 : 0;
-        subjectScore += categoryPercentage * (category.weight / 100);
-        finalScore += categoryPercentage * (category.weight / 100);
+        const categoryPercentage = categoryMax > 0 ? (categoryEarned / categoryMax) : 0;
+        subjectPointsEarned += categoryPercentage * category.weight;
+        subjectCatWeightSum += category.weight;
       });
-      const subjectWeight = subject.categories.reduce((sum, c) => sum + c.weight, 0);
-      subjectAvgs[subject.name] = subjectWeight > 0 ? ((subjectScore / subjectWeight) * 100).toFixed(2) + '%' : '0.00%';
+      
+      const subjectScorePercentage = subjectCatWeightSum > 0 ? (subjectPointsEarned / subjectCatWeightSum) * 100 : 0;
+      
+      const subjectTargetWeight = subject.targetWeight !== undefined && subject.targetWeight > 0 
+        ? subject.targetWeight 
+        : (subject.categories.reduce((sum, c) => sum + c.weight, 0) || 100);
+        
+      weightedSubjectSum += (subjectScorePercentage * subjectTargetWeight);
+      totalSubjectWeight += subjectTargetWeight;
+      
+      subjectAvgs[subject.name] = subjectScorePercentage.toFixed(1) + '%';
     });
+    
+    const finalScore = totalSubjectWeight > 0 ? (weightedSubjectSum / totalSubjectWeight) : 0;
     return { id: student.id, finalScore, subjectAvgs };
   });
 
@@ -136,7 +176,7 @@ function generateExportData(currentRecord: ClassRecord, currentLevel: Level) {
       row[`${subject.name} Avg`] = metrics.subjectAvgs[subject.name];
     });
 
-    row['Total Average'] = `${metrics.finalScore.toFixed(2)}%`;
+    row['Total Average'] = `${metrics.finalScore.toFixed(1)}%`;
     row['Rank'] = rank;
     row['Grade'] = grade;
     row['Status'] = status;

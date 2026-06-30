@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings, Plus, Download, Calculator, GraduationCap, Users, FolderOpen, Save, FileSpreadsheet, FileText, Search, Maximize, Minimize, Pin, LogOut } from 'lucide-react';
-import { Level, Student, ClassRecord, getLevelTotalWeight, calculateGrade } from './types';
+import { Settings, Plus, Download, Calculator, GraduationCap, Users, FolderOpen, Save, FileSpreadsheet, FileText, Search, Maximize, Minimize, Pin, LogOut, Trash2, Edit2 } from 'lucide-react';
+import { Level, Student, ClassRecord, getLevelTotalWeight, calculateGrade, PAPER_STYLES, WALLPAPERS } from './types';
 import SettingsModal from './components/SettingsModal';
 import GradeTable from './components/GradeTable';
 import { exportToExcel, exportToPDF } from './lib/exportUtils';
@@ -35,6 +35,47 @@ export default function App() {
   const [showClassModal, setShowClassModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const [paperStyle, setPaperStyle] = useState<string>(() => {
+    return localStorage.getItem('gradecalc_paper_style') || 'white_smooth';
+  });
+  const [wallpaper, setWallpaper] = useState<string>(() => {
+    return localStorage.getItem('gradecalc_wallpaper') || 'default_slate';
+  });
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('gradecalc_pinned_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [resultMode, setResultMode] = useState<'full' | 'midterm' | 'final'>(() => {
+    return (localStorage.getItem('gradecalc_result_mode') as 'full' | 'midterm' | 'final') || 'full';
+  });
+
+  const handleUpdateResultMode = (mode: 'full' | 'midterm' | 'final') => {
+    setResultMode(mode);
+    localStorage.setItem('gradecalc_result_mode', mode);
+  };
+
+  const handleUpdatePaperStyle = (style: string) => {
+    setPaperStyle(style);
+    localStorage.setItem('gradecalc_paper_style', style);
+  };
+
+  const handleUpdateWallpaper = (wp: string) => {
+    setWallpaper(wp);
+    localStorage.setItem('gradecalc_wallpaper', wp);
+  };
+
+  const togglePin = (id: string) => {
+    setPinnedIds(prev => {
+      const updated = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
+      localStorage.setItem('gradecalc_pinned_ids', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -88,7 +129,10 @@ export default function App() {
 
   const filteredRecords = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    const filtered = classRecords.filter(cr => 
+    const filtered = classRecords.map(cr => ({
+      ...cr,
+      isPinned: pinnedIds.includes(cr.id)
+    })).filter(cr => 
       cr.className.toLowerCase().includes(query) ||
       cr.teacherName.toLowerCase().includes(query) ||
       cr.termName.toLowerCase().includes(query) ||
@@ -99,7 +143,7 @@ export default function App() {
       if (!a.isPinned && b.isPinned) return 1;
       return a.className.localeCompare(b.className);
     });
-  }, [classRecords, levels, searchQuery]);
+  }, [classRecords, levels, searchQuery, pinnedIds]);
 
   const currentRecord = classRecords.find(cr => cr.id === currentRecordId) || classRecords[0];
   const currentLevel = levels.find(l => l.id === currentRecord?.levelId) || levels[0];
@@ -134,6 +178,41 @@ export default function App() {
     };
     saveClassRecord(user.uid, newRecord);
     setCurrentRecordId(newRecord.id);
+  };
+
+  const handleCreateLevel = () => {
+    if (!user) return;
+    const name = prompt("Enter a name for the new level profile:", "Level One Foundation One");
+    if (name === null) return; // User cancelled
+    const finalName = name.trim() || 'New Level';
+    const newLevel: Level = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: finalName,
+      subjects: []
+    };
+    saveLevel(user.uid, newLevel);
+    handleUpdateCurrentRecord('levelId', newLevel.id);
+  };
+
+  const handleRenameLevel = () => {
+    if (!user || !currentLevel) return;
+    const name = prompt("Enter a new name for this level profile:", currentLevel.name);
+    if (name === null) return;
+    const finalName = name.trim();
+    if (!finalName) return;
+    const updated = { ...currentLevel, name: finalName };
+    saveLevel(user.uid, updated);
+  };
+
+  const handleDeleteLevel = () => {
+    if (!user || levels.length <= 1) return;
+    if (confirm(`Are you sure you want to delete ${currentLevel.name}?`)) {
+      deleteLevel(user.uid, currentLevel.id);
+      const remaining = levels.filter(l => l.id !== currentLevel.id);
+      if (remaining.length > 0) {
+        handleUpdateCurrentRecord('levelId', remaining[0].id);
+      }
+    }
   };
 
   const handleDeleteCurrentRecord = () => {
@@ -261,18 +340,21 @@ export default function App() {
     );
   }
 
+  const currentWp = WALLPAPERS.find(w => w.id === wallpaper) || WALLPAPERS[0];
+  const currentPaper = PAPER_STYLES.find(p => p.id === paperStyle) || PAPER_STYLES[0];
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
+    <div className={`min-h-screen ${currentWp.bgClass} text-slate-900 font-sans flex flex-col transition-colors duration-200`}>
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-30 shadow-sm">
         <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg shrink-0">
-              <Calculator className="w-6 h-6 text-white" />
+            <div className={`p-2 rounded-lg shrink-0 ${getTeacherColor(currentRecord.teacherName)}`}>
+              <Calculator className="w-6 h-6" />
             </div>
             <div>
               <h1 className="text-xl font-semibold tracking-tight text-slate-900">Developing Potential for Success</h1>
-              <p className="text-sm text-slate-500">Performance Calculator</p>
+              <p className="text-sm text-slate-500">{currentRecord.teacherName || 'Unknown Teacher'}'s Class ({currentRecord.className})</p>
             </div>
           </div>
           
@@ -296,17 +378,28 @@ export default function App() {
                 className="px-2 py-1.5 text-sm font-medium text-slate-800 bg-transparent border-0 focus:ring-0 min-w-[120px] max-w-[200px] cursor-pointer outline-none truncate"
               >
                 {filteredRecords.length > 0 ? (
-                  filteredRecords.map(cr => (
-                    <option key={cr.id} value={cr.id}>{cr.isPinned ? '📌 ' : ''}{cr.teacherName} - {cr.className}</option>
+                  Object.entries(
+                    filteredRecords.reduce((acc, cr) => {
+                      const t = cr.teacherName || 'Unknown Teacher';
+                      if (!acc[t]) acc[t] = [];
+                      acc[t].push(cr);
+                      return acc;
+                    }, {} as Record<string, ClassRecord[]>)
+                  ).map(([teacher, records]) => (
+                    <optgroup key={teacher} label={teacher}>
+                      {(records as ClassRecord[]).map(cr => (
+                        <option key={cr.id} value={cr.id}>{pinnedIds.includes(cr.id) ? '📌 ' : ''}{cr.className} ({cr.termName})</option>
+                      ))}
+                    </optgroup>
                   ))
                 ) : (
                   <option disabled>No classes found</option>
                 )}
               </select>
               <button
-                onClick={() => handleUpdateCurrentRecord('isPinned', !currentRecord.isPinned)}
-                className={`p-1.5 ml-1 rounded shadow-sm transition-colors ${currentRecord.isPinned ? 'text-amber-500 bg-amber-50 hover:bg-amber-100' : 'text-slate-500 hover:text-blue-600 hover:bg-white'}`}
-                title={currentRecord.isPinned ? "Unpin Class" : "Pin Class"}
+                onClick={() => togglePin(currentRecord.id)}
+                className={`p-1.5 ml-1 rounded shadow-sm transition-colors ${pinnedIds.includes(currentRecord.id) ? 'text-amber-500 bg-amber-50 hover:bg-amber-100' : 'text-slate-500 hover:text-blue-600 hover:bg-white'}`}
+                title={pinnedIds.includes(currentRecord.id) ? "Unpin Class" : "Pin Class"}
               >
                 <Pin className="w-4 h-4" />
               </button>
@@ -318,9 +411,24 @@ export default function App() {
                 <Plus className="w-4 h-4" />
               </button>
             </div>
-            
-            {/* Action Buttons */}
+                       {/* Action Buttons */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 hide-scrollbar shrink-0">
+              <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden shrink-0">
+                <div className="px-2.5 py-1.5 text-[10px] font-bold text-slate-500 border-r border-slate-200 bg-slate-50 uppercase tracking-wider h-full flex items-center select-none">
+                  Mode
+                </div>
+                <select
+                  value={resultMode}
+                  onChange={(e) => handleUpdateResultMode(e.target.value as 'full' | 'midterm' | 'final')}
+                  className="px-2.5 py-2 text-sm font-medium text-slate-700 bg-transparent border-0 focus:ring-0 cursor-pointer outline-none"
+                  title="Choose grading period view and export mode"
+                >
+                  <option value="full">Full Term (Mid + Final)</option>
+                  <option value="midterm">Mid-Term Results</option>
+                  <option value="final">Final Test Only</option>
+                </select>
+              </div>
+
               <button
                 onClick={() => setShowSettings(!showSettings)}
                 className={`flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border rounded-lg whitespace-nowrap ${showSettings ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
@@ -331,7 +439,7 @@ export default function App() {
               
               <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden shrink-0">
                 <button
-                  onClick={() => exportToExcel(currentRecord, currentLevel)}
+                  onClick={() => exportToExcel(currentRecord, currentLevel, resultMode)}
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors border-r border-slate-200"
                   title="Export Summary to Excel"
                 >
@@ -339,7 +447,7 @@ export default function App() {
                   Excel
                 </button>
                 <button
-                  onClick={() => exportToPDF(currentRecord, currentLevel)}
+                  onClick={() => exportToPDF(currentRecord, currentLevel, resultMode)}
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors border-r border-slate-200"
                   title="Export Summary to PDF"
                 >
@@ -368,11 +476,11 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-6 py-8 space-y-6 flex-1 flex flex-col">
+      <main className="max-w-[1400px] mx-auto px-2 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6 flex-1 flex flex-col w-full">
         
         {/* Class Record Meta Info */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-wrap gap-6 items-center shrink-0">
-          <div className="flex-1 min-w-[200px]">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-5 flex flex-wrap gap-4 sm:gap-6 items-center shrink-0">
+          <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
             <label className="block text-xs font-medium text-slate-500 mb-1">Term / Semester</label>
             <input 
               type="text" 
@@ -382,7 +490,7 @@ export default function App() {
               placeholder="e.g. Term 1, 2024"
             />
           </div>
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
             <label className="block text-xs font-medium text-slate-500 mb-1">Class Name</label>
             <input 
               type="text" 
@@ -392,7 +500,7 @@ export default function App() {
               placeholder="e.g. Morning Class A"
             />
           </div>
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
             <label className="block text-xs font-medium text-slate-500 mb-1">Teacher</label>
             <div className="flex items-center gap-2 relative">
               <div className={`w-6 h-6 rounded flex shrink-0 items-center justify-center text-xs font-bold ${getTeacherColor(currentRecord.teacherName)}`}>
@@ -407,17 +515,24 @@ export default function App() {
               />
             </div>
           </div>
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
             <label className="block text-xs font-medium text-slate-500 mb-1">Level Profile</label>
-            <select
-              value={currentRecord.levelId}
-              onChange={(e) => handleUpdateCurrentRecord('levelId', e.target.value)}
-              className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors cursor-pointer"
-            >
-              {levels.map(l => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-1">
+              <select
+                value={currentRecord.levelId}
+                onChange={(e) => handleUpdateCurrentRecord('levelId', e.target.value)}
+                className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors cursor-pointer"
+              >
+                {levels.map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+              <button onClick={handleRenameLevel} className="p-1.5 text-slate-400 hover:text-blue-600 rounded transition-colors" title="Rename Current Level"><Edit2 className="w-4 h-4" /></button>
+              <button onClick={handleCreateLevel} className="p-1.5 text-slate-400 hover:text-blue-600 rounded transition-colors" title="Create New Level"><Plus className="w-4 h-4" /></button>
+              {levels.length > 1 && (
+                <button onClick={handleDeleteLevel} className="p-1.5 text-slate-400 hover:text-red-600 rounded transition-colors" title="Delete Current Level"><Trash2 className="w-4 h-4" /></button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -428,11 +543,18 @@ export default function App() {
             onUpdateLevel={handleUpdateLevel}
             onReplaceLevels={handleReplaceLevels}
             onClose={() => setShowSettings(false)}
+            paperStyle={paperStyle}
+            onUpdatePaperStyle={handleUpdatePaperStyle}
+            wallpaper={wallpaper}
+            onUpdateWallpaper={handleUpdateWallpaper}
           />
         )}
 
-        <div className={`bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 rounded-none h-screen' : 'rounded-xl flex-1 min-h-[400px]'}`}>
-          <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50 shrink-0">
+        <div 
+          className={`shadow-sm border overflow-hidden flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 rounded-none h-screen' : 'rounded-xl flex-1 min-h-[400px]'} ${currentPaper.bgClass} ${currentPaper.borderClass} ${currentPaper.textClass}`}
+          style={currentPaper.customStyle}
+        >
+          <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-black/[0.02] shrink-0">
             <h2 className="text-lg font-medium text-slate-800 flex items-center gap-2">
               <Users className="w-5 h-5 text-slate-500" />
               Student Roster & Grades
@@ -467,6 +589,7 @@ export default function App() {
                 onUpdateStudent={handleUpdateStudentScore}
                 onUpdateStudentField={handleUpdateStudentField}
                 onDeleteStudent={handleDeleteStudent}
+                resultMode={resultMode}
               />
             ) : (
               <div className="p-12 text-center flex flex-col items-center justify-center min-h-full">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Save, Copy, FileText, Database } from 'lucide-react';
-import { Level, Subject } from '../types';
+import { Level, Subject, PAPER_STYLES, WALLPAPERS } from '../types';
 import LevelSettings from './LevelSettings';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -12,6 +12,10 @@ interface Props {
   onUpdateLevel: (level: Level) => void;
   onReplaceLevels: (levels: Level[]) => void;
   onClose: () => void;
+  paperStyle: string;
+  onUpdatePaperStyle: (id: string) => void;
+  wallpaper: string;
+  onUpdateWallpaper: (id: string) => void;
 }
 
 const TEMPLATE_100_PERCENT: Subject[] = [
@@ -57,11 +61,12 @@ const TEMPLATE_100_PERCENT: Subject[] = [
   }
 ];
 
-export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceLevels, onClose }: Props) {
+export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceLevels, onClose, paperStyle, onUpdatePaperStyle, wallpaper, onUpdateWallpaper }: Props) {
   const [activeTab, setActiveTab] = useState<'level' | 'templates' | 'appearance' | 'account'>('level');
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authError, setAuthError] = useState('');
   const [savedTemplates, setSavedTemplates] = useState<{id: string, name: string, authorName: string, levels: Level[]}[]>([]);
+  const [editingTemplate, setEditingTemplate] = useState<{ id: string, authorId: string, name: string, levels: Level[] } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -112,6 +117,30 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
     }
   };
 
+  const handleApplyToCurrentLevel = (templateLevels: Level[]) => {
+    if (!templateLevels || templateLevels.length === 0) return;
+    
+    let selectedLevel = templateLevels[0];
+    
+    if (templateLevels.length > 1) {
+      const optionsText = templateLevels.map((l, index) => `${index + 1}. ${l.name}`).join("\n");
+      const choice = prompt(`This template contains multiple level profiles. Choose which one to apply to your current class (enter 1 to ${templateLevels.length}):\n\n${optionsText}`, "1");
+      if (choice === null) return;
+      const index = parseInt(choice) - 1;
+      if (isNaN(index) || index < 0 || index >= templateLevels.length) {
+        alert("Invalid choice!");
+        return;
+      }
+      selectedLevel = templateLevels[index];
+    }
+
+    if (confirm(`Apply subjects from template profile "${selectedLevel.name}" to your current class profile "${level.name}"? This will overwrite your current subject weights and categories.`)) {
+      const clonedSubjects = JSON.parse(JSON.stringify(selectedLevel.subjects || []));
+      onUpdateLevel({ ...level, subjects: clonedSubjects });
+      alert(`Applied "${selectedLevel.name}" subjects to your current class successfully!`);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
@@ -137,6 +166,22 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
     } catch (e) {
       console.error("Error renaming template:", e);
       alert("Failed to rename template.");
+    }
+  };
+
+  const handleSaveEditedTemplate = async () => {
+    if (!editingTemplate || !user || user.uid !== editingTemplate.authorId) return;
+    try {
+      await updateDoc(doc(db, `templates`, editingTemplate.id), {
+        levels: editingTemplate.levels,
+        name: editingTemplate.name
+      });
+      fetchTemplates();
+      setEditingTemplate(null);
+      alert("Template updated successfully!");
+    } catch (e) {
+      console.error("Error updating template:", e);
+      alert("Failed to update template.");
     }
   };
 
@@ -176,43 +221,41 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
   };
 
   const applyTemplateToCurrent = () => {
-    if (confirm("This will replace the current level's subjects. Continue?")) {
-      onUpdateLevel({ ...level, subjects: JSON.parse(JSON.stringify(TEMPLATE_100_PERCENT)) });
-      alert("Template applied to current level!");
-    }
+    handleApplyToCurrentLevel([{ id: 'standard', name: 'Standard 100% Weighted Level', subjects: TEMPLATE_100_PERCENT }]);
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         
-        <div className="flex border-b border-slate-200">
-          <button
-            className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'level' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-            onClick={() => setActiveTab('level')}
-          >
-            Current Level
-          </button>
-          <button
-            className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'templates' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-            onClick={() => setActiveTab('templates')}
-          >
-            Templates & Sync
-          </button>
-          <button
-            className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'appearance' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-            onClick={() => setActiveTab('appearance')}
-          >
-            Appearance
-          </button>
-          <button
-            className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'account' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-            onClick={() => setActiveTab('account')}
-          >
-            Account
-          </button>
-          <div className="flex-1" />
-          <button onClick={onClose} className="p-4 text-slate-400 hover:text-slate-600 transition-colors">
+        <div className="flex items-center border-b border-slate-200">
+          <div className="flex overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex-1">
+            <button
+              className={`px-4 sm:px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'level' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setActiveTab('level')}
+            >
+              Current Level
+            </button>
+            <button
+              className={`px-4 sm:px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'templates' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setActiveTab('templates')}
+            >
+              Templates & Sync
+            </button>
+            <button
+              className={`px-4 sm:px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'appearance' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setActiveTab('appearance')}
+            >
+              Appearance
+            </button>
+            <button
+              className={`px-4 sm:px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'account' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setActiveTab('account')}
+            >
+              Account
+            </button>
+          </div>
+          <button onClick={onClose} className="p-4 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -226,25 +269,62 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
 
           {activeTab === 'templates' && (
             <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-800">Templates Library</h2>
-                  <p className="text-sm text-slate-500">Save your full level structures to the community library, or load existing ones.</p>
+              {editingTemplate ? (
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-4xl mx-auto">
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-800">Editing Template: {editingTemplate.name}</h2>
+                      <p className="text-sm text-slate-500">Changes will be saved to your template library.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => setEditingTemplate(null)}
+                        className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handleSaveEditedTemplate}
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <Save className="w-4 h-4" />
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+                  <LevelSettings 
+                    level={editingTemplate.levels[0]} 
+                    onUpdateLevel={(newLevel) => {
+                      setEditingTemplate({
+                        ...editingTemplate,
+                        levels: [newLevel, ...editingTemplate.levels.slice(1)]
+                      });
+                    }} 
+                    onClose={() => setEditingTemplate(null)} 
+                    hideHeader={true} 
+                  />
                 </div>
-                {user ? (
-                  <button onClick={handleSaveTemplate} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                    <Save className="w-4 h-4" />
-                    Save My Levels as Template
-                  </button>
-                ) : (
-                  <button onClick={() => setActiveTab('account')} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium border border-slate-200">
-                    <User className="w-4 h-4" />
-                    Sign In to Save Templates
-                  </button>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-800">Templates Library</h2>
+                      <p className="text-sm text-slate-500">Save your full level structures to the community library, or load existing ones.</p>
+                    </div>
+                    {user ? (
+                      <button onClick={handleSaveTemplate} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                        <Save className="w-4 h-4" />
+                        Save My Levels as Template
+                      </button>
+                    ) : (
+                      <button onClick={() => setActiveTab('account')} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium border border-slate-200">
+                        <User className="w-4 h-4" />
+                        Sign In to Save Templates
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {savedTemplates.map(template => (
                   <div key={template.id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
                     <div className="flex items-start gap-4 mb-4">
@@ -258,12 +338,13 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
                       </div>
                     </div>
                     <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2">
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <button 
-                          onClick={() => handleLoadTemplate(template.levels)}
+                          onClick={() => handleApplyToCurrentLevel(template.levels)}
                           className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                          title="Apply to Current Class"
                         >
-                          <Copy className="w-4 h-4" /> Load
+                          <Copy className="w-4 h-4" /> Apply to Class
                         </button>
                         <button 
                           onClick={() => handleDuplicateTemplate(template)}
@@ -275,7 +356,13 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
                       </div>
                       
                       {user && user.uid === (template as any).authorId && (
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <button 
+                            onClick={() => setEditingTemplate(template as any)}
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                          >
+                            Edit
+                          </button>
                           <button 
                             onClick={() => handleRenameTemplate(template.id, (template as any).authorId, template.name)}
                             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
@@ -304,16 +391,33 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
                       <p className="text-sm text-slate-500 mt-1">Listening (25%), Reading (25%), Grammar (25%), Vocabulary (25%). Each with Quizzes, Assignment, Participation, and Homework.</p>
                     </div>
                   </div>
-                  <div className="mt-auto pt-4 border-t border-slate-100">
-                    <button 
-                      onClick={applyTemplateToCurrent}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
-                    >
-                      <Copy className="w-4 h-4" /> Apply to Current Level Only
-                    </button>
+                  <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button 
+                        onClick={applyTemplateToCurrent}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                        title="Apply to Current Class"
+                      >
+                        <Copy className="w-4 h-4" /> Apply to Class
+                      </button>
+                      <button 
+                        onClick={() => handleDuplicateTemplate({
+                          id: 'standard_100',
+                          name: 'Standard 100% Template',
+                          authorName: 'System',
+                          levels: [{ id: 'standard', name: 'Standard Level', subjects: TEMPLATE_100_PERCENT }]
+                        })}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                        title="Duplicate to Library"
+                      >
+                        <Copy className="w-4 h-4" /> Duplicate
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
+              </>
+              )}
             </div>
           )}
 
@@ -321,7 +425,7 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
             <div className="p-6">
               <div className="mb-6">
                 <h2 className="text-xl font-semibold text-slate-800">Appearance</h2>
-                <p className="text-sm text-slate-500">Customize the look and feel of your app.</p>
+                <p className="text-sm text-slate-500">Customize the look and feel of your workspace. These options are saved locally for you and do not affect other collaborators.</p>
               </div>
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-2xl">
                 <div className="space-y-6">
@@ -341,14 +445,59 @@ export default function SettingsModal({ level, levels, onUpdateLevel, onReplaceL
                       <option value="'Space Grotesk', sans-serif">Space Grotesk (Modern)</option>
                     </select>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Accent Theme</label>
-                    <div className="flex gap-3">
-                      {['blue', 'purple', 'emerald', 'rose'].map(color => (
-                        <button key={color} className={`w-10 h-10 rounded-full border-2 border-transparent hover:scale-110 transition-transform bg-${color}-500`} title={color}></button>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Paper Style (20 options)</label>
+                    <p className="text-xs text-slate-500 mb-2">Sets the background texture and style of the student grades table sheet.</p>
+                    <select 
+                      value={paperStyle}
+                      onChange={(e) => onUpdatePaperStyle(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                    >
+                      {PAPER_STYLES.map(style => (
+                        <option key={style.id} value={style.id}>{style.name}</option>
                       ))}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2">Note: Theme colors are currently hardcoded for stability. Future updates will allow full theme customization.</p>
+                    </select>
+                    
+                    {/* Preview of current paper style */}
+                    {(() => {
+                      const currentStyle = PAPER_STYLES.find(p => p.id === paperStyle) || PAPER_STYLES[0];
+                      return (
+                        <div 
+                          className={`p-4 rounded-lg border text-sm flex flex-col justify-center items-center h-16 shadow-inner ${currentStyle.bgClass} ${currentStyle.borderClass} ${currentStyle.textClass}`}
+                          style={currentStyle.customStyle}
+                        >
+                          <span className="font-semibold">Sample Paper Texture</span>
+                          <span className="text-xs opacity-85">Grid lines or dots appear here.</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Wallpaper Background (20 options)</label>
+                    <p className="text-xs text-slate-500 mb-2">Sets the outer background color of the website. Soft colors keep text clearly visible.</p>
+                    <select 
+                      value={wallpaper}
+                      onChange={(e) => onUpdateWallpaper(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                    >
+                      {WALLPAPERS.map(wp => (
+                        <option key={wp.id} value={wp.id}>{wp.name}</option>
+                      ))}
+                    </select>
+
+                    {/* Preview of current wallpaper background */}
+                    {(() => {
+                      const currentWp = WALLPAPERS.find(w => w.id === wallpaper) || WALLPAPERS[0];
+                      return (
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-slate-500">Live background color:</span>
+                          <div className={`w-6 h-6 rounded border border-slate-300 shadow-sm ${currentWp.bgClass}`}></div>
+                          <span className="text-xs font-semibold text-slate-700">{currentWp.name}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
