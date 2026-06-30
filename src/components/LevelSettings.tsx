@@ -147,29 +147,26 @@ export default function LevelSettings({ level, onUpdateLevel, onClose, hideHeade
                   placeholder="Subject Name"
                 />
                 <div className="flex items-center gap-1.5 ml-auto">
-                  <span className="text-xs text-slate-500 hidden sm:inline">Target:</span>
+                  <span className="text-xs text-slate-500 hidden sm:inline" title="How much this subject contributes to the final average">Subj. Weight:</span>
                   <div className="relative">
                     <input 
                       type="number"
                       min="0"
                       value={subject.targetWeight ?? ''}
                       onChange={(e) => handleUpdateSubjectTarget(subject.id, Number(e.target.value))}
-                      className="w-16 bg-white border border-slate-300 rounded px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                      className="w-16 bg-white border border-slate-300 rounded px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center font-semibold text-blue-700"
                       placeholder="e.g. 25"
                     />
                     <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-medium px-2 py-1 rounded-md whitespace-nowrap ${
-                    subject.targetWeight !== undefined && subjectWeight !== subject.targetWeight && subjectWeight !== 100
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${
+                    subjectWeight !== 100
                       ? 'bg-red-100 text-red-700 border border-red-200' 
-                      : 'bg-slate-200 text-slate-600'
-                  }`} title={subject.targetWeight !== undefined && subjectWeight !== subject.targetWeight && subjectWeight !== 100 ? 'Warning: Actual sum of categories does not match target weight (should equal target weight or 100%)' : 'Actual sum of categories'}>
-                    {subjectWeight}% Actual
-                  </span>
-                  <span className="text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap bg-blue-50 text-blue-700 border border-blue-200" title="Each subject's average is calculated out of 100% based on its categories.">
-                    100% Subject Score
+                      : 'bg-green-100 text-green-700 border border-green-200'
+                  }`} title={subjectWeight !== 100 ? 'Warning: Category weights should sum up to exactly 100%' : 'Category weights sum to 100%'}>
+                    Cat. Sum: {subjectWeight}%
                   </span>
                   <button
                     onClick={() => handleDeleteSubject(subject.id)}

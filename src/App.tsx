@@ -1,55 +1,169 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Settings, Plus, Download, Calculator, GraduationCap, Users, FolderOpen, Save, FileSpreadsheet, FileText, Search, Maximize, Minimize, Pin, LogOut, Trash2, Edit2, Copy, Lock, Sparkles } from 'lucide-react';
-import { Level, Student, ClassRecord, getLevelTotalWeight, calculateGrade, PAPER_STYLES, WALLPAPERS } from './types';
-import SettingsModal from './components/SettingsModal';
-import GradeTable from './components/GradeTable';
-import { exportToExcel, exportToPDF } from './lib/exportUtils';
-import { auth, googleProvider } from './lib/firebase';
-import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { subscribeToLevels, subscribeToClasses, saveLevel, saveClassRecord, deleteClassRecordRef, deleteLevel } from './lib/firestoreUtils';
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  Settings,
+  Plus,
+  Download,
+  Calculator,
+  GraduationCap,
+  Users,
+  FolderOpen,
+  Save,
+  FileSpreadsheet,
+  FileText,
+  Search,
+  Maximize,
+  Minimize,
+  Pin,
+  LogOut,
+  Trash2,
+  Edit2,
+  Copy,
+  Lock,
+  Sparkles,
+} from "lucide-react";
+import {
+  Level,
+  Student,
+  ClassRecord,
+  getLevelTotalWeight,
+  calculateGrade,
+  PAPER_STYLES,
+  WALLPAPERS,
+} from "./types";
+import SettingsModal from "./components/SettingsModal";
+import GradeTable from "./components/GradeTable";
+import { exportToExcel, exportToPDF } from "./lib/exportUtils";
+import { auth, googleProvider } from "./lib/firebase";
+import {
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  User,
+} from "firebase/auth";
+import {
+  subscribeToLevels,
+  subscribeToClasses,
+  saveLevel,
+  saveClassRecord,
+  deleteClassRecordRef,
+  deleteLevel,
+} from "./lib/firestoreUtils";
 
 const SAMPLE_TEACHERS = [
-  'Davina',
-  'Sek Sokha',
-  'Sok Sopheap',
-  'Chan Srey',
-  'Keo Sarath',
-  'Nguon Vanna',
-  'Ouk Davin',
-  'Seng Dara',
-  'Tep Bopha',
-  'DPS Admin'
+  "Davina",
+  "Sek Sokha",
+  "Sok Sopheap",
+  "Chan Srey",
+  "Keo Sarath",
+  "Nguon Vanna",
+  "Ouk Davin",
+  "Seng Dara",
+  "Tep Bopha",
+  "DPS Admin",
 ];
 
 const SAMPLE_5_SUBJECTS: Level = {
-  id: 'sample_5_subj',
-  name: 'Sample 5 Subjects (20% each)',
-  subjects: ['Reading', 'Listening', 'Speaking', 'Grammar', 'Vocabulary'].map((name, i) => ({
-    id: `s_sample_${i}`,
-    name,
-    targetWeight: 20,
-    categories: [
-      { id: `c_cp_${i}`, name: 'Class Participation', weight: 10, itemCount: 1, itemMaxScores: [100] },
-      { id: `c_ass_${i}`, name: 'Assignment', weight: 10, itemCount: 1, itemMaxScores: [100] },
-      { id: `c_mid_${i}`, name: 'Midterm', weight: 30, itemCount: 1, itemMaxScores: [100] },
-      { id: `c_fin_${i}`, name: 'Final', weight: 50, itemCount: 1, itemMaxScores: [100] },
-    ]
-  }))
+  id: "sample_5_subj",
+  name: "Sample 5 Subjects (20% each)",
+  subjects: ["Reading", "Listening", "Speaking", "Grammar", "Vocabulary"].map(
+    (name, i) => ({
+      id: `s_sample_${i}`,
+      name,
+      targetWeight: 20,
+      categories: [
+        {
+          id: `c_cp_${i}`,
+          name: "Class Participation",
+          weight: 10,
+          itemCount: 1,
+          itemMaxScores: [100],
+        },
+        {
+          id: `c_ass_${i}`,
+          name: "Assignment",
+          weight: 10,
+          itemCount: 1,
+          itemMaxScores: [100],
+        },
+        {
+          id: `c_mid_${i}`,
+          name: "Midterm",
+          weight: 30,
+          itemCount: 1,
+          itemMaxScores: [100],
+        },
+        {
+          id: `c_fin_${i}`,
+          name: "Final",
+          weight: 50,
+          itemCount: 1,
+          itemMaxScores: [100],
+        },
+      ],
+    }),
+  ),
 };
 
 const DEFAULT_LEVELS: Level[] = [
-  { id: 'l1', name: 'Foundation 1', subjects: [{ id: 's1', name: 'Listening', categories: [{ id: 'c1', name: 'Quizzes', weight: 5, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] }, { id: 'c2', name: 'Assignment', weight: 20, itemCount: 2, itemMaxScores: [100, 100] }] }] },
-  { id: 'l2', name: 'Foundation 2', subjects: [] },
-  { id: 'l3', name: 'Survivor 1', subjects: [] },
-  { id: 'l4', name: 'Survivor 2', subjects: [] },
-  { id: 'l5', name: 'Explorer 1', subjects: [] },
-  { id: 'l6', name: 'Explorer 2', subjects: [] },
-  { id: 'l7', name: 'Achiever 1', subjects: [] },
-  { id: 'l8', name: 'Achiever 2', subjects: [] },
-  { id: 'l9', name: 'Master 1', subjects: [] },
-  { id: 'l10', name: 'Master 2', subjects: [] },
-  { id: 'l11', name: 'Champion 1', subjects: [] },
-  { id: 'l12', name: 'Champion 2', subjects: [] },
+  {
+    id: "l1",
+    name: "Foundation 1",
+    subjects: [
+      {
+        id: "s1",
+        name: "Listening",
+        targetWeight: 25,
+        categories: [
+          {
+            id: "c1",
+            name: "Quizzes",
+            weight: 10,
+            itemCount: 5,
+            itemMaxScores: [100, 100, 100, 100, 100],
+          },
+          {
+            id: "c2",
+            name: "Assignment Participation",
+            weight: 10,
+            itemCount: 1,
+            itemMaxScores: [100],
+          },
+          {
+            id: "c3",
+            name: "Homework",
+            weight: 20,
+            itemCount: 5,
+            itemMaxScores: [100, 100, 100, 100, 100],
+          },
+          {
+            id: "c4",
+            name: "Midterm",
+            weight: 30,
+            itemCount: 1,
+            itemMaxScores: [100],
+          },
+          {
+            id: "c5",
+            name: "Final",
+            weight: 30,
+            itemCount: 1,
+            itemMaxScores: [100],
+          },
+        ],
+      },
+    ],
+  },
+  { id: "l2", name: "Foundation 2", subjects: [] },
+  { id: "l3", name: "Survivor 1", subjects: [] },
+  { id: "l4", name: "Survivor 2", subjects: [] },
+  { id: "l5", name: "Explorer 1", subjects: [] },
+  { id: "l6", name: "Explorer 2", subjects: [] },
+  { id: "l7", name: "Achiever 1", subjects: [] },
+  { id: "l8", name: "Achiever 2", subjects: [] },
+  { id: "l9", name: "Master 1", subjects: [] },
+  { id: "l10", name: "Master 2", subjects: [] },
+  { id: "l11", name: "Champion 1", subjects: [] },
+  { id: "l12", name: "Champion 2", subjects: [] },
 ];
 
 export default function App() {
@@ -58,68 +172,77 @@ export default function App() {
 
   const [levels, setLevels] = useState<Level[]>([]);
   const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
-  
-  const [currentRecordId, setCurrentRecordId] = useState<string>('');
+
+  const [currentRecordId, setCurrentRecordId] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [paperStyle, setPaperStyle] = useState<string>(() => {
-    return localStorage.getItem('gradecalc_paper_style') || 'white_smooth';
+    return localStorage.getItem("gradecalc_paper_style") || "white_smooth";
   });
   const [wallpaper, setWallpaper] = useState<string>(() => {
-    return localStorage.getItem('gradecalc_wallpaper') || 'default_slate';
+    return localStorage.getItem("gradecalc_wallpaper") || "default_slate";
   });
   const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem('gradecalc_pinned_ids');
+      const saved = localStorage.getItem("gradecalc_pinned_ids");
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
-  const [resultMode, setResultMode] = useState<'full' | 'midterm' | 'final'>(() => {
-    return (localStorage.getItem('gradecalc_result_mode') as 'full' | 'midterm' | 'final') || 'full';
-  });
+  const [resultMode, setResultMode] = useState<"full" | "midterm" | "final">(
+    () => {
+      return (
+        (localStorage.getItem("gradecalc_result_mode") as
+          "full" | "midterm" | "final") || "full"
+      );
+    },
+  );
 
   const [accessCode, setAccessCode] = useState<string>(() => {
-    return localStorage.getItem('gradecalc_access_code') || '';
+    return localStorage.getItem("gradecalc_access_code") || "";
   });
 
   // Template / Duplication Modal State
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [templateClassName, setTemplateClassName] = useState('');
-  const [templateTermName, setTemplateTermName] = useState('');
-  const [templateTeacherName, setTemplateTeacherName] = useState('');
-  const [templateLevelId, setTemplateLevelId] = useState('');
-  const [templateRosterOption, setTemplateRosterOption] = useState<'empty' | 'copy_names' | 'copy_all'>('copy_names');
-  const [templateAccessCode, setTemplateAccessCode] = useState('');
+  const [templateClassName, setTemplateClassName] = useState("");
+  const [templateTermName, setTemplateTermName] = useState("");
+  const [templateTeacherName, setTemplateTeacherName] = useState("");
+  const [templateLevelId, setTemplateLevelId] = useState("");
+  const [templateRosterOption, setTemplateRosterOption] = useState<
+    "empty" | "copy_names" | "copy_all"
+  >("copy_names");
+  const [templateAccessCode, setTemplateAccessCode] = useState("");
 
-  const handleUpdateResultMode = (mode: 'full' | 'midterm' | 'final') => {
+  const handleUpdateResultMode = (mode: "full" | "midterm" | "final") => {
     setResultMode(mode);
-    localStorage.setItem('gradecalc_result_mode', mode);
+    localStorage.setItem("gradecalc_result_mode", mode);
   };
 
   const handleUpdatePaperStyle = (style: string) => {
     setPaperStyle(style);
-    localStorage.setItem('gradecalc_paper_style', style);
+    localStorage.setItem("gradecalc_paper_style", style);
   };
 
   const handleUpdateWallpaper = (wp: string) => {
     setWallpaper(wp);
-    localStorage.setItem('gradecalc_wallpaper', wp);
+    localStorage.setItem("gradecalc_wallpaper", wp);
   };
 
   const handleUpdateAccessCode = (code: string) => {
     setAccessCode(code);
-    localStorage.setItem('gradecalc_access_code', code);
+    localStorage.setItem("gradecalc_access_code", code);
   };
 
   const togglePin = (id: string) => {
-    setPinnedIds(prev => {
-      const updated = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
-      localStorage.setItem('gradecalc_pinned_ids', JSON.stringify(updated));
+    setPinnedIds((prev) => {
+      const updated = prev.includes(id)
+        ? prev.filter((p) => p !== id)
+        : [...prev, id];
+      localStorage.setItem("gradecalc_pinned_ids", JSON.stringify(updated));
       return updated;
     });
   };
@@ -138,7 +261,7 @@ export default function App() {
       if (fetchedLevels.length === 0) {
         // Initialize default levels for new users
         setLevels(DEFAULT_LEVELS);
-        DEFAULT_LEVELS.forEach(l => saveLevel(user.uid, l));
+        DEFAULT_LEVELS.forEach((l) => saveLevel(user.uid, l));
       } else {
         setLevels(fetchedLevels);
       }
@@ -157,41 +280,47 @@ export default function App() {
 
   useEffect(() => {
     if (!user || levels.length === 0) return;
-    const hasSample = levels.some(l => l.id === 'sample_5_subj');
-    if (!hasSample && !localStorage.getItem('gradecalc_sample_template_added')) {
+    const hasSample = levels.some((l) => l.id === "sample_5_subj");
+    if (
+      !hasSample &&
+      !localStorage.getItem("gradecalc_sample_template_added")
+    ) {
       const newLevels = [...levels, SAMPLE_5_SUBJECTS];
       setLevels(newLevels);
       saveLevel(user.uid, SAMPLE_5_SUBJECTS);
-      localStorage.setItem('gradecalc_sample_template_added', 'true');
+      localStorage.setItem("gradecalc_sample_template_added", "true");
     }
-    
+
     // Check if the sample class record exists
-    if (!classRecords.some(cr => cr.levelId === 'sample_5_subj') && !localStorage.getItem('gradecalc_sample_class_added')) {
+    if (
+      !classRecords.some((cr) => cr.levelId === "sample_5_subj") &&
+      !localStorage.getItem("gradecalc_sample_class_added")
+    ) {
       const sampleStudent: Student = {
-        id: 'student_sample_1',
-        name: 'Test Student',
+        id: "student_sample_1",
+        name: "Test Student",
         scores: {},
-        attendance: '',
-        comment: ''
+        attendance: "",
+        comment: "",
       };
       // Populate scores for the test student
-      SAMPLE_5_SUBJECTS.subjects.forEach(subj => {
-        subj.categories.forEach(cat => {
-          sampleStudent.scores[`${subj.id}_${cat.id}_0`] = 100;
+      SAMPLE_5_SUBJECTS.subjects.forEach((subj) => {
+        subj.categories.forEach((cat) => {
+          sampleStudent.scores[`${cat.id}_0`] = 100;
         });
       });
-      
+
       const newClassRecord: ClassRecord = {
-        id: 'cr_sample_test_' + Date.now(),
-        className: 'Sample Testing Class',
-        termName: 'Term 1',
-        teacherName: 'Teacher',
-        levelId: 'sample_5_subj',
-        students: [sampleStudent]
+        id: "cr_sample_test_" + Date.now(),
+        className: "Sample Testing Class",
+        termName: "Term 1",
+        teacherName: "Teacher",
+        levelId: "sample_5_subj",
+        students: [sampleStudent],
       };
-      setClassRecords(prev => [...prev, newClassRecord]);
+      setClassRecords((prev) => [...prev, newClassRecord]);
       saveClassRecord(user.uid, newClassRecord);
-      localStorage.setItem('gradecalc_sample_class_added', 'true');
+      localStorage.setItem("gradecalc_sample_class_added", "true");
     }
   }, [user, levels, classRecords]);
 
@@ -199,7 +328,7 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
-      console.error('Login error', error);
+      console.error("Login error", error);
     }
   };
 
@@ -208,39 +337,45 @@ export default function App() {
       await signOut(auth);
       setLevels([]);
       setClassRecords([]);
-      setCurrentRecordId('');
+      setCurrentRecordId("");
     } catch (error) {
-      console.error('Logout error', error);
+      console.error("Logout error", error);
     }
   };
 
   const filteredRecords = useMemo(() => {
     const query = searchQuery.toLowerCase();
     const code = accessCode.trim().toLowerCase();
-    const isAdmin = code === 'dps';
+    const isAdmin = code === "dps";
 
-    const filtered = classRecords.map(cr => ({
-      ...cr,
-      isPinned: pinnedIds.includes(cr.id)
-    })).filter(cr => {
-      // Access Code Filter:
-      // If code is empty, we show all classes.
-      // If code is 'dps', we show all classes (Admin override).
-      // Otherwise, we only show classes where the teacher name or class record access code matches.
-      if (code && !isAdmin) {
-        const matchesTeacher = (cr.teacherName || '').toLowerCase().includes(code);
-        const matchesClassCode = (cr.accessCode || '').toLowerCase() === code;
-        if (!matchesTeacher && !matchesClassCode) return false;
-      }
+    const filtered = classRecords
+      .map((cr) => ({
+        ...cr,
+        isPinned: pinnedIds.includes(cr.id),
+      }))
+      .filter((cr) => {
+        // Access Code Filter:
+        // If code is empty, we show all classes.
+        // If code is 'dps', we show all classes (Admin override).
+        // Otherwise, we only show classes where the teacher name or class record access code matches.
+        if (code && !isAdmin) {
+          const matchesTeacher = (cr.teacherName || "")
+            .toLowerCase()
+            .includes(code);
+          const matchesClassCode = (cr.accessCode || "").toLowerCase() === code;
+          if (!matchesTeacher && !matchesClassCode) return false;
+        }
 
-      // Search Query Filter
-      return (
-        cr.className.toLowerCase().includes(query) ||
-        cr.teacherName.toLowerCase().includes(query) ||
-        cr.termName.toLowerCase().includes(query) ||
-        (levels.find(l => l.id === cr.levelId)?.name.toLowerCase() || '').includes(query)
-      );
-    });
+        // Search Query Filter
+        return (
+          cr.className.toLowerCase().includes(query) ||
+          cr.teacherName.toLowerCase().includes(query) ||
+          cr.termName.toLowerCase().includes(query) ||
+          (
+            levels.find((l) => l.id === cr.levelId)?.name.toLowerCase() || ""
+          ).includes(query)
+        );
+      });
 
     return filtered.sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
@@ -249,8 +384,10 @@ export default function App() {
     });
   }, [classRecords, levels, searchQuery, pinnedIds, accessCode]);
 
-  const currentRecord = classRecords.find(cr => cr.id === currentRecordId) || classRecords[0];
-  const currentLevel = levels.find(l => l.id === currentRecord?.levelId) || levels[0];
+  const currentRecord =
+    classRecords.find((cr) => cr.id === currentRecordId) || classRecords[0];
+  const currentLevel =
+    levels.find((l) => l.id === currentRecord?.levelId) || levels[0];
   const totalWeight = currentLevel ? getLevelTotalWeight(currentLevel) : 0;
 
   const handleUpdateLevel = (updatedLevel: Level) => {
@@ -261,7 +398,7 @@ export default function App() {
   const handleReplaceLevels = (newLevels: Level[]) => {
     if (!user) return;
     // Just save all the newly set levels, real-time sync will pick them up
-    newLevels.forEach(l => saveLevel(user.uid, l));
+    newLevels.forEach((l) => saveLevel(user.uid, l));
   };
 
   const handleUpdateCurrentRecord = (field: keyof ClassRecord, value: any) => {
@@ -274,12 +411,12 @@ export default function App() {
     if (!user || levels.length === 0) return;
     const newRecord: ClassRecord = {
       id: Math.random().toString(36).substr(2, 9),
-      termName: 'Term 1, 2026',
-      className: 'New Class Profile',
-      teacherName: user.displayName || 'Teacher Name',
+      termName: "Term 1, 2026",
+      className: "New Class Profile",
+      teacherName: user.displayName || "Teacher Name",
       levelId: levels[0].id,
       students: [],
-      accessCode: ''
+      accessCode: "",
     };
     saveClassRecord(user.uid, newRecord);
     setCurrentRecordId(newRecord.id);
@@ -287,39 +424,39 @@ export default function App() {
 
   const handleOpenTemplateModal = () => {
     if (!currentRecord) return;
-    setTemplateClassName(currentRecord.className + ' (Copy)');
+    setTemplateClassName(currentRecord.className + " (Copy)");
     setTemplateTermName(currentRecord.termName);
     setTemplateTeacherName(currentRecord.teacherName);
     setTemplateLevelId(currentRecord.levelId);
-    setTemplateAccessCode(currentRecord.accessCode || '');
-    setTemplateRosterOption('copy_names');
+    setTemplateAccessCode(currentRecord.accessCode || "");
+    setTemplateRosterOption("copy_names");
     setShowTemplateModal(true);
   };
 
   const handleCreateFromTemplate = () => {
     if (!user || !currentRecord) return;
-    
+
     let newStudents: Student[] = [];
-    if (templateRosterOption === 'copy_all') {
+    if (templateRosterOption === "copy_all") {
       newStudents = JSON.parse(JSON.stringify(currentRecord.students));
-    } else if (templateRosterOption === 'copy_names') {
-      newStudents = currentRecord.students.map(s => ({
+    } else if (templateRosterOption === "copy_names") {
+      newStudents = currentRecord.students.map((s) => ({
         id: Math.random().toString(36).substr(2, 9),
         name: s.name,
         scores: {},
-        attendance: '',
-        comment: ''
+        attendance: "",
+        comment: "",
       }));
     }
 
     const newRecord: ClassRecord = {
       id: Math.random().toString(36).substr(2, 9),
-      termName: templateTermName.trim() || 'New Term',
-      className: templateClassName.trim() || 'New Class',
-      teacherName: templateTeacherName.trim() || 'Teacher Name',
+      termName: templateTermName.trim() || "New Term",
+      className: templateClassName.trim() || "New Class",
+      teacherName: templateTeacherName.trim() || "Teacher Name",
       levelId: templateLevelId || currentLevel.id,
       students: newStudents,
-      accessCode: templateAccessCode.trim() || undefined
+      accessCode: templateAccessCode.trim() || undefined,
     };
 
     saveClassRecord(user.uid, newRecord);
@@ -329,21 +466,27 @@ export default function App() {
 
   const handleCreateLevel = () => {
     if (!user) return;
-    const name = prompt("Enter a name for the new level profile:", "Level One Foundation One");
+    const name = prompt(
+      "Enter a name for the new level profile:",
+      "Level One Foundation One",
+    );
     if (name === null) return; // User cancelled
-    const finalName = name.trim() || 'New Level';
+    const finalName = name.trim() || "New Level";
     const newLevel: Level = {
       id: Math.random().toString(36).substr(2, 9),
       name: finalName,
-      subjects: []
+      subjects: [],
     };
     saveLevel(user.uid, newLevel);
-    handleUpdateCurrentRecord('levelId', newLevel.id);
+    handleUpdateCurrentRecord("levelId", newLevel.id);
   };
 
   const handleRenameLevel = () => {
     if (!user || !currentLevel) return;
-    const name = prompt("Enter a new name for this level profile:", currentLevel.name);
+    const name = prompt(
+      "Enter a new name for this level profile:",
+      currentLevel.name,
+    );
     if (name === null) return;
     const finalName = name.trim();
     if (!finalName) return;
@@ -355,9 +498,9 @@ export default function App() {
     if (!user || levels.length <= 1) return;
     if (confirm(`Are you sure you want to delete ${currentLevel.name}?`)) {
       deleteLevel(user.uid, currentLevel.id);
-      const remaining = levels.filter(l => l.id !== currentLevel.id);
+      const remaining = levels.filter((l) => l.id !== currentLevel.id);
       if (remaining.length > 0) {
-        handleUpdateCurrentRecord('levelId', remaining[0].id);
+        handleUpdateCurrentRecord("levelId", remaining[0].id);
       }
     }
   };
@@ -365,7 +508,7 @@ export default function App() {
   const handleDeleteCurrentRecord = () => {
     if (classRecords.length <= 1 || !currentRecord || !user) return;
     deleteClassRecordRef(user.uid, currentRecord.id);
-    const remaining = classRecords.filter(cr => cr.id !== currentRecord.id);
+    const remaining = classRecords.filter((cr) => cr.id !== currentRecord.id);
     if (remaining.length > 0) {
       setCurrentRecordId(remaining[0].id);
     }
@@ -375,26 +518,34 @@ export default function App() {
     if (!currentRecord || !user) return;
     const newStudent: Student = {
       id: Math.random().toString(36).substr(2, 9),
-      name: 'New Student',
+      name: "New Student",
       scores: {},
-      attendance: '',
-      comment: ''
+      attendance: "",
+      comment: "",
     };
-    const updated = { ...currentRecord, students: [...currentRecord.students, newStudent] };
+    const updated = {
+      ...currentRecord,
+      students: [...currentRecord.students, newStudent],
+    };
     saveClassRecord(user.uid, updated);
   };
 
-  const handleUpdateStudentScore = (id: string, categoryId: string, itemIndex: number, value: any) => {
+  const handleUpdateStudentScore = (
+    id: string,
+    categoryId: string,
+    itemIndex: number,
+    value: any,
+  ) => {
     if (!currentRecord || !user) return;
     const updated = {
       ...currentRecord,
-      students: currentRecord.students.map(s => {
+      students: currentRecord.students.map((s) => {
         if (s.id !== id) return s;
         return {
           ...s,
-          scores: { ...s.scores, [`${categoryId}_${itemIndex}`]: value }
+          scores: { ...s.scores, [`${categoryId}_${itemIndex}`]: value },
         };
-      })
+      }),
     };
     saveClassRecord(user.uid, updated);
   };
@@ -403,22 +554,43 @@ export default function App() {
     if (!currentRecord || !user) return;
     const updated = {
       ...currentRecord,
-      students: currentRecord.students.map(s => s.id === id ? { ...s, [field]: value } : s)
+      students: currentRecord.students.map((s) =>
+        s.id === id ? { ...s, [field]: value } : s,
+      ),
     };
     saveClassRecord(user.uid, updated);
   };
 
   const handleDeleteStudent = (id: string) => {
     if (!currentRecord || !user) return;
-    const updated = { ...currentRecord, students: currentRecord.students.filter(s => s.id !== id) };
+    const updated = {
+      ...currentRecord,
+      students: currentRecord.students.filter((s) => s.id !== id),
+    };
     saveClassRecord(user.uid, updated);
   };
 
-  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || 'T';
+  const getInitials = (name: string) =>
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2) || "T";
   const getTeacherColor = (name: string) => {
-    const colors = ['bg-red-100 text-red-700', 'bg-blue-100 text-blue-700', 'bg-green-100 text-green-700', 'bg-yellow-100 text-yellow-700', 'bg-purple-100 text-purple-700', 'bg-pink-100 text-pink-700', 'bg-indigo-100 text-indigo-700', 'bg-teal-100 text-teal-700'];
+    const colors = [
+      "bg-red-100 text-red-700",
+      "bg-blue-100 text-blue-700",
+      "bg-green-100 text-green-700",
+      "bg-yellow-100 text-yellow-700",
+      "bg-purple-100 text-purple-700",
+      "bg-pink-100 text-pink-700",
+      "bg-indigo-100 text-indigo-700",
+      "bg-teal-100 text-teal-700",
+    ];
     let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < name.length; i++)
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return colors[Math.abs(hash) % colors.length];
   };
 
@@ -437,9 +609,13 @@ export default function App() {
           <div className="bg-blue-600 p-3 rounded-xl inline-flex mb-4">
             <Calculator className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-2xl font-semibold text-slate-800 mb-2">Teacher Grade Calculator</h2>
-          <p className="text-slate-500 mb-6">Sign in to manage your classes and grading structures.</p>
-          <button 
+          <h2 className="text-2xl font-semibold text-slate-800 mb-2">
+            Teacher Grade Calculator
+          </h2>
+          <p className="text-slate-500 mb-6">
+            Sign in to manage your classes and grading structures.
+          </p>
+          <button
             onClick={handleLogin}
             className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
@@ -454,8 +630,12 @@ export default function App() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="text-center p-8 bg-white rounded-xl shadow-sm border border-slate-200">
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">Initializing Data</h2>
-          <p className="text-slate-500 mb-4 animate-pulse">Setting up your default levels...</p>
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">
+            Initializing Data
+          </h2>
+          <p className="text-slate-500 mb-4 animate-pulse">
+            Setting up your default levels...
+          </p>
         </div>
       </div>
     );
@@ -464,53 +644,72 @@ export default function App() {
   if (!currentRecord) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50 flex-col">
-         <div className="text-center p-8 bg-white rounded-xl shadow-sm border border-slate-200 max-w-md w-full">
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">No Classes Found</h2>
-          <p className="text-slate-500 mb-6">You don't have any class records yet. Create one to get started.</p>
+        <div className="text-center p-8 bg-white rounded-xl shadow-sm border border-slate-200 max-w-md w-full">
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">
+            No Classes Found
+          </h2>
+          <p className="text-slate-500 mb-6">
+            You don't have any class records yet. Create one to get started.
+          </p>
           <div className="flex flex-col gap-3">
-             <button 
-                onClick={handleCreateNewRecord}
-                className="px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                Create New Class
-              </button>
-              <button 
-                onClick={handleLogout}
-                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Sign out
-              </button>
+            <button
+              onClick={handleCreateNewRecord}
+              className="px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              Create New Class
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  const currentWp = WALLPAPERS.find(w => w.id === wallpaper) || WALLPAPERS[0];
-  const currentPaper = PAPER_STYLES.find(p => p.id === paperStyle) || PAPER_STYLES[0];
+  const currentWp = WALLPAPERS.find((w) => w.id === wallpaper) || WALLPAPERS[0];
+  const currentPaper =
+    PAPER_STYLES.find((p) => p.id === paperStyle) || PAPER_STYLES[0];
 
   return (
-    <div className={`min-h-screen ${currentWp.bgClass} text-slate-900 font-sans flex flex-col transition-colors duration-200`}>
+    <div
+      className={`min-h-screen ${currentWp.bgClass} text-slate-900 font-sans flex flex-col transition-colors duration-200`}
+    >
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-30 shadow-sm">
         <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg shrink-0 ${getTeacherColor(currentRecord.teacherName)}`}>
+            <div
+              className={`p-2 rounded-lg shrink-0 ${getTeacherColor(currentRecord.teacherName)}`}
+            >
               <Calculator className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight text-slate-900">Developing Potential for Success</h1>
-              <p className="text-sm text-slate-500">{currentRecord.teacherName || 'Unknown Teacher'}'s Class ({currentRecord.className})</p>
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                Developing Potential for Success
+              </h1>
+              <p className="text-sm text-slate-500">
+                {currentRecord.teacherName || "Unknown Teacher"}'s Class (
+                {currentRecord.className})
+              </p>
             </div>
           </div>
-          
+
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full lg:w-auto">
             {/* Teacher Code / Unlock */}
             <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200 shrink-0">
-              <div className="flex items-center px-2 text-slate-500" title="Enter Teacher Code or DPS for Admin override">
+              <div
+                className="flex items-center px-2 text-slate-500"
+                title="Enter Teacher Code or DPS for Admin override"
+              >
                 <Lock className="w-3.5 h-3.5 mr-1" />
-                <span className="text-xs font-semibold whitespace-nowrap">My Code:</span>
+                <span className="text-xs font-semibold whitespace-nowrap">
+                  My Code:
+                </span>
               </div>
               <input
                 type="text"
@@ -519,8 +718,11 @@ export default function App() {
                 onChange={(e) => handleUpdateAccessCode(e.target.value)}
                 className="bg-transparent border-0 focus:ring-0 text-sm w-24 outline-none font-medium text-slate-800 uppercase"
               />
-              {accessCode.toUpperCase() === 'DPS' && (
-                <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded ml-1 animate-pulse" title="Admin Mode overrides all codes">
+              {accessCode.toUpperCase() === "DPS" && (
+                <span
+                  className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded ml-1 animate-pulse"
+                  title="Admin Mode overrides all codes"
+                >
                   DPS ADMIN
                 </span>
               )}
@@ -546,16 +748,22 @@ export default function App() {
               >
                 {filteredRecords.length > 0 ? (
                   Object.entries(
-                    filteredRecords.reduce((acc, cr) => {
-                      const t = cr.teacherName || 'Unknown Teacher';
-                      if (!acc[t]) acc[t] = [];
-                      acc[t].push(cr);
-                      return acc;
-                    }, {} as Record<string, ClassRecord[]>)
+                    filteredRecords.reduce(
+                      (acc, cr) => {
+                        const t = cr.teacherName || "Unknown Teacher";
+                        if (!acc[t]) acc[t] = [];
+                        acc[t].push(cr);
+                        return acc;
+                      },
+                      {} as Record<string, ClassRecord[]>,
+                    ),
                   ).map(([teacher, records]) => (
                     <optgroup key={teacher} label={teacher}>
-                      {(records as ClassRecord[]).map(cr => (
-                        <option key={cr.id} value={cr.id}>{pinnedIds.includes(cr.id) ? '📌 ' : ''}{cr.className} ({cr.termName})</option>
+                      {(records as ClassRecord[]).map((cr) => (
+                        <option key={cr.id} value={cr.id}>
+                          {pinnedIds.includes(cr.id) ? "📌 " : ""}
+                          {cr.className} ({cr.termName})
+                        </option>
                       ))}
                     </optgroup>
                   ))
@@ -565,8 +773,12 @@ export default function App() {
               </select>
               <button
                 onClick={() => togglePin(currentRecord.id)}
-                className={`p-1.5 ml-1 rounded shadow-sm transition-colors ${pinnedIds.includes(currentRecord.id) ? 'text-amber-500 bg-amber-50 hover:bg-amber-100' : 'text-slate-500 hover:text-blue-600 hover:bg-white'}`}
-                title={pinnedIds.includes(currentRecord.id) ? "Unpin Class" : "Pin Class"}
+                className={`p-1.5 ml-1 rounded shadow-sm transition-colors ${pinnedIds.includes(currentRecord.id) ? "text-amber-500 bg-amber-50 hover:bg-amber-100" : "text-slate-500 hover:text-blue-600 hover:bg-white"}`}
+                title={
+                  pinnedIds.includes(currentRecord.id)
+                    ? "Unpin Class"
+                    : "Pin Class"
+                }
               >
                 <Pin className="w-4 h-4" />
               </button>
@@ -578,7 +790,7 @@ export default function App() {
                 <Plus className="w-4 h-4" />
               </button>
             </div>
-                       {/* Action Buttons */}
+            {/* Action Buttons */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 hide-scrollbar shrink-0">
               <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden shrink-0">
                 <div className="px-2.5 py-1.5 text-[10px] font-bold text-slate-500 border-r border-slate-200 bg-slate-50 uppercase tracking-wider h-full flex items-center select-none">
@@ -586,7 +798,11 @@ export default function App() {
                 </div>
                 <select
                   value={resultMode}
-                  onChange={(e) => handleUpdateResultMode(e.target.value as 'full' | 'midterm' | 'final')}
+                  onChange={(e) =>
+                    handleUpdateResultMode(
+                      e.target.value as "full" | "midterm" | "final",
+                    )
+                  }
                   className="px-2.5 py-2 text-sm font-medium text-slate-700 bg-transparent border-0 focus:ring-0 cursor-pointer outline-none"
                   title="Choose grading period view and export mode"
                 >
@@ -598,15 +814,17 @@ export default function App() {
 
               <button
                 onClick={() => setShowSettings(!showSettings)}
-                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border rounded-lg whitespace-nowrap ${showSettings ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border rounded-lg whitespace-nowrap ${showSettings ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"}`}
               >
                 <Settings className="w-4 h-4" />
                 Level Config
               </button>
-              
+
               <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden shrink-0">
                 <button
-                  onClick={() => exportToExcel(currentRecord, currentLevel, resultMode)}
+                  onClick={() =>
+                    exportToExcel(currentRecord, currentLevel, resultMode)
+                  }
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors border-r border-slate-200"
                   title="Export Summary to Excel"
                 >
@@ -614,7 +832,9 @@ export default function App() {
                   Excel
                 </button>
                 <button
-                  onClick={() => exportToPDF(currentRecord, currentLevel, resultMode)}
+                  onClick={() =>
+                    exportToPDF(currentRecord, currentLevel, resultMode)
+                  }
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors border-r border-slate-200"
                   title="Export Summary to PDF"
                 >
@@ -639,7 +859,7 @@ export default function App() {
                 <Plus className="w-4 h-4" />
                 Add Student
               </button>
-              
+
               <button
                 onClick={handleLogout}
                 className="p-2 ml-1 text-slate-500 hover:text-red-600 bg-white border border-slate-300 rounded-lg shadow-sm transition-colors"
@@ -653,79 +873,120 @@ export default function App() {
       </header>
 
       <main className="max-w-[1400px] mx-auto px-2 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6 flex-1 flex flex-col w-full">
-        
         {/* Class Record Meta Info */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-5 flex flex-wrap gap-4 sm:gap-6 items-center shrink-0">
           <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Term / Semester</label>
-            <input 
-              type="text" 
-              value={currentRecord.termName} 
-              onChange={e => handleUpdateCurrentRecord('termName', e.target.value)}
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Term / Semester
+            </label>
+            <input
+              type="text"
+              value={currentRecord.termName}
+              onChange={(e) =>
+                handleUpdateCurrentRecord("termName", e.target.value)
+              }
               className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors"
               placeholder="e.g. Term 1, 2024"
             />
           </div>
           <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Class Name</label>
-            <input 
-              type="text" 
-              value={currentRecord.className} 
-              onChange={e => handleUpdateCurrentRecord('className', e.target.value)}
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Class Name
+            </label>
+            <input
+              type="text"
+              value={currentRecord.className}
+              onChange={(e) =>
+                handleUpdateCurrentRecord("className", e.target.value)
+              }
               className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors"
               placeholder="e.g. Morning Class A"
             />
           </div>
           <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Teacher</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Teacher
+            </label>
             <div className="flex items-center gap-2 relative">
-              <div className={`w-6 h-6 rounded flex shrink-0 items-center justify-center text-xs font-bold ${getTeacherColor(currentRecord.teacherName)}`}>
+              <div
+                className={`w-6 h-6 rounded flex shrink-0 items-center justify-center text-xs font-bold ${getTeacherColor(currentRecord.teacherName)}`}
+              >
                 {getInitials(currentRecord.teacherName)}
               </div>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 list="sample-teachers"
-                value={currentRecord.teacherName} 
-                onChange={e => handleUpdateCurrentRecord('teacherName', e.target.value)}
+                value={currentRecord.teacherName}
+                onChange={(e) =>
+                  handleUpdateCurrentRecord("teacherName", e.target.value)
+                }
                 className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors"
                 placeholder="Teacher Name"
               />
               <datalist id="sample-teachers">
-                {SAMPLE_TEACHERS.map(t => (
+                {SAMPLE_TEACHERS.map((t) => (
                   <option key={t} value={t} />
                 ))}
               </datalist>
             </div>
           </div>
           <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Class Lock Code</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Class Lock Code
+            </label>
             <div className="flex items-center gap-2 relative">
               <Lock className="w-4 h-4 text-slate-400" />
-              <input 
-                type="text" 
-                value={currentRecord.accessCode || ''} 
-                onChange={e => handleUpdateCurrentRecord('accessCode', e.target.value)}
+              <input
+                type="text"
+                value={currentRecord.accessCode || ""}
+                onChange={(e) =>
+                  handleUpdateCurrentRecord("accessCode", e.target.value)
+                }
                 className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors uppercase"
                 placeholder="e.g. DAVINA"
               />
             </div>
           </div>
           <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Level Profile</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Level Profile
+            </label>
             <div className="flex items-center gap-1">
               <select
                 value={currentRecord.levelId}
-                onChange={(e) => handleUpdateCurrentRecord('levelId', e.target.value)}
+                onChange={(e) =>
+                  handleUpdateCurrentRecord("levelId", e.target.value)
+                }
                 className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors cursor-pointer"
               >
-                {levels.map(l => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
+                {levels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
                 ))}
               </select>
-              <button onClick={handleRenameLevel} className="p-1.5 text-slate-400 hover:text-blue-600 rounded transition-colors" title="Rename Current Level"><Edit2 className="w-4 h-4" /></button>
-              <button onClick={handleCreateLevel} className="p-1.5 text-slate-400 hover:text-blue-600 rounded transition-colors" title="Create New Level"><Plus className="w-4 h-4" /></button>
+              <button
+                onClick={handleRenameLevel}
+                className="p-1.5 text-slate-400 hover:text-blue-600 rounded transition-colors"
+                title="Rename Current Level"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleCreateLevel}
+                className="p-1.5 text-slate-400 hover:text-blue-600 rounded transition-colors"
+                title="Create New Level"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
               {levels.length > 1 && (
-                <button onClick={handleDeleteLevel} className="p-1.5 text-slate-400 hover:text-red-600 rounded transition-colors" title="Delete Current Level"><Trash2 className="w-4 h-4" /></button>
+                <button
+                  onClick={handleDeleteLevel}
+                  className="p-1.5 text-slate-400 hover:text-red-600 rounded transition-colors"
+                  title="Delete Current Level"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               )}
             </div>
           </div>
@@ -754,19 +1015,28 @@ export default function App() {
                   <Sparkles className="w-5 h-5 text-purple-600" />
                   Create Class from Template
                 </h3>
-                <button onClick={() => setShowTemplateModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">X</button>
+                <button
+                  onClick={() => setShowTemplateModal(false)}
+                  className="text-slate-400 hover:text-slate-600 font-bold"
+                >
+                  X
+                </button>
               </div>
               <div className="p-6 space-y-4">
                 <p className="text-sm text-slate-500">
-                  Instantly duplicate this class setup to another teacher, rename it, and select a new target level profile! This saves a tremendous amount of time.
+                  Instantly duplicate this class setup to another teacher,
+                  rename it, and select a new target level profile! This saves a
+                  tremendous amount of time.
                 </p>
-                
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">New Class Name</label>
-                  <input 
-                    type="text" 
-                    value={templateClassName} 
-                    onChange={e => setTemplateClassName(e.target.value)}
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    New Class Name
+                  </label>
+                  <input
+                    type="text"
+                    value={templateClassName}
+                    onChange={(e) => setTemplateClassName(e.target.value)}
                     placeholder="e.g. Foundation 2 Class B"
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                   />
@@ -774,22 +1044,26 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">New Term Name</label>
-                    <input 
-                      type="text" 
-                      value={templateTermName} 
-                      onChange={e => setTemplateTermName(e.target.value)}
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      New Term Name
+                    </label>
+                    <input
+                      type="text"
+                      value={templateTermName}
+                      onChange={(e) => setTemplateTermName(e.target.value)}
                       placeholder="e.g. Term 3, 2026"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Teacher</label>
-                    <input 
-                      type="text" 
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Teacher
+                    </label>
+                    <input
+                      type="text"
                       list="sample-teachers"
-                      value={templateTeacherName} 
-                      onChange={e => setTemplateTeacherName(e.target.value)}
+                      value={templateTeacherName}
+                      onChange={(e) => setTemplateTeacherName(e.target.value)}
                       placeholder="Teacher Name"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                     />
@@ -798,23 +1072,29 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Level Profile</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Level Profile
+                    </label>
                     <select
                       value={templateLevelId}
-                      onChange={e => setTemplateLevelId(e.target.value)}
+                      onChange={(e) => setTemplateLevelId(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                     >
-                      {levels.map(l => (
-                        <option key={l.id} value={l.id}>{l.name}</option>
+                      {levels.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Lock Code</label>
-                    <input 
-                      type="text" 
-                      value={templateAccessCode} 
-                      onChange={e => setTemplateAccessCode(e.target.value)}
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Lock Code
+                    </label>
+                    <input
+                      type="text"
+                      value={templateAccessCode}
+                      onChange={(e) => setTemplateAccessCode(e.target.value)}
                       placeholder="e.g. DAVINA"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-bold"
                     />
@@ -822,52 +1102,64 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Student Roster Options</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Student Roster Options
+                  </label>
                   <div className="space-y-2">
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="roster_option" 
-                        value="copy_names" 
-                        checked={templateRosterOption === 'copy_names'} 
-                        onChange={() => setTemplateRosterOption('copy_names')}
+                      <input
+                        type="radio"
+                        name="roster_option"
+                        value="copy_names"
+                        checked={templateRosterOption === "copy_names"}
+                        onChange={() => setTemplateRosterOption("copy_names")}
                         className="text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm text-slate-700">Duplicate student list but <strong>clear grades to 0</strong> (Recommended Template)</span>
+                      <span className="text-sm text-slate-700">
+                        Duplicate student list but{" "}
+                        <strong>clear grades to 0</strong> (Recommended
+                        Template)
+                      </span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="roster_option" 
-                        value="copy_all" 
-                        checked={templateRosterOption === 'copy_all'} 
-                        onChange={() => setTemplateRosterOption('copy_all')}
+                      <input
+                        type="radio"
+                        name="roster_option"
+                        value="copy_all"
+                        checked={templateRosterOption === "copy_all"}
+                        onChange={() => setTemplateRosterOption("copy_all")}
                         className="text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm text-slate-700">Duplicate student list <strong>with all current grades</strong></span>
+                      <span className="text-sm text-slate-700">
+                        Duplicate student list{" "}
+                        <strong>with all current grades</strong>
+                      </span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="roster_option" 
-                        value="empty" 
-                        checked={templateRosterOption === 'empty'} 
-                        onChange={() => setTemplateRosterOption('empty')}
+                      <input
+                        type="radio"
+                        name="roster_option"
+                        value="empty"
+                        checked={templateRosterOption === "empty"}
+                        onChange={() => setTemplateRosterOption("empty")}
                         className="text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm text-slate-700">Create class with an <strong>empty student roster</strong></span>
+                      <span className="text-sm text-slate-700">
+                        Create class with an{" "}
+                        <strong>empty student roster</strong>
+                      </span>
                     </label>
                   </div>
                 </div>
               </div>
               <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
-                <button 
+                <button
                   onClick={() => setShowTemplateModal(false)}
                   className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleCreateFromTemplate}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm flex items-center gap-2"
                 >
@@ -879,8 +1171,8 @@ export default function App() {
           </div>
         )}
 
-        <div 
-          className={`shadow-sm border overflow-hidden flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 rounded-none h-screen' : 'rounded-xl flex-1 min-h-[400px]'} ${currentPaper.bgClass} ${currentPaper.borderClass} ${currentPaper.textClass}`}
+        <div
+          className={`shadow-sm border overflow-hidden flex flex-col ${isFullscreen ? "fixed inset-0 z-50 rounded-none h-screen" : "rounded-xl flex-1 min-h-[400px]"} ${currentPaper.bgClass} ${currentPaper.borderClass} ${currentPaper.textClass}`}
           style={currentPaper.customStyle}
         >
           <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-black/[0.02] shrink-0">
@@ -904,11 +1196,15 @@ export default function App() {
                 className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-white rounded shadow-sm transition-colors border border-slate-200"
                 title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
               >
-                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                {isFullscreen ? (
+                  <Minimize className="w-4 h-4" />
+                ) : (
+                  <Maximize className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
-          
+
           <div className="flex-1 overflow-auto bg-transparent relative">
             {currentLevel.subjects.length > 0 ? (
               <GradeTable
@@ -926,8 +1222,13 @@ export default function App() {
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
                   <Settings className="w-8 h-8 text-slate-400" />
                 </div>
-                <h3 className="text-lg font-medium text-slate-800 mb-1">No Subjects Configured</h3>
-                <p className="text-slate-500 mb-4 max-w-sm">Open Level Config to define subjects, categories, and their weights before adding student grades.</p>
+                <h3 className="text-lg font-medium text-slate-800 mb-1">
+                  No Subjects Configured
+                </h3>
+                <p className="text-slate-500 mb-4 max-w-sm">
+                  Open Level Config to define subjects, categories, and their
+                  weights before adding student grades.
+                </p>
                 <button
                   onClick={() => setShowSettings(true)}
                   className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
@@ -942,4 +1243,3 @@ export default function App() {
     </div>
   );
 }
-
