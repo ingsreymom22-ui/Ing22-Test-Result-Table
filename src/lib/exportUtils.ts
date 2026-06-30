@@ -10,17 +10,17 @@ export function exportToExcel(currentRecord: ClassRecord, currentLevel: Level, r
   
   const modeLabel = resultMode === 'midterm' ? 'Mid-Term Results' : (resultMode === 'final' ? 'Final Test Results' : 'Full Term Results (Mid + Final)');
 
-  // Add rows at the top for headers/metadata
+  // Add 5 blank rows at the very top for custom logos/headers
   utils.sheet_add_aoa(ws, [
+    [], [], [], [], [], // 5 empty rows for custom logo space
+    [`DEVELOPING POTENTIAL FOR SUCCESS - GRADE BOOK SUMMARY`],
     [`Class: ${currentRecord.className}`],
-    [`Term: ${currentRecord.termName}`],
-    [`Teacher: ${currentRecord.teacherName}`],
-    [`Level: ${currentLevel.name}`],
+    [`Term: ${currentRecord.termName}  |  Teacher: ${currentRecord.teacherName}  |  Level: ${currentLevel.name}`],
     [`Report Period: ${modeLabel}`],
     []
   ], { origin: "A1" });
 
-  utils.sheet_add_json(ws, data, { origin: "A7", skipHeader: false });
+  utils.sheet_add_json(ws, data, { origin: "A11", skipHeader: false });
   
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, "Grades");
@@ -57,17 +57,18 @@ export function exportToPDF(currentRecord: ClassRecord, currentLevel: Level, res
   
   const modeLabel = resultMode === 'midterm' ? 'Mid-Term Results' : (resultMode === 'final' ? 'Final Test Results' : 'Full Term Results (Mid + Final)');
 
+  // Leave top 28mm blank for logo positioning, start title at Y=34
   doc.setFontSize(16);
-  doc.text(`Class: ${currentRecord.className}`, 14, 18);
+  doc.text(`DEVELOPING POTENTIAL FOR SUCCESS - GRADE BOOK SUMMARY`, 14, 34);
   doc.setFontSize(10);
-  doc.text(`Term: ${currentRecord.termName} | Teacher: ${currentRecord.teacherName} | Level: ${currentLevel.name} | Period: ${modeLabel}`, 14, 25);
+  doc.text(`Class: ${currentRecord.className} | Term: ${currentRecord.termName} | Teacher: ${currentRecord.teacherName} | Level: ${currentLevel.name} | Period: ${modeLabel}`, 14, 42);
 
   const headers = Object.keys(data[0] || {});
   const rows = data.map(row => headers.map(h => row[h as keyof typeof row]));
 
   // @ts-ignore
   doc.autoTable({
-    startY: 30,
+    startY: 48,
     head: [headers],
     body: rows,
     theme: 'grid',

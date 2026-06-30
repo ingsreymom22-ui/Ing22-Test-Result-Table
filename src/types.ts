@@ -37,6 +37,7 @@ export interface ClassRecord {
   levelId: string;
   students: Student[];
   isPinned?: boolean;
+  accessCode?: string;
 }
 
 export function calculateGrade(score: number): string {
@@ -53,7 +54,10 @@ export function getSubjectWeight(subject: Subject): number {
 }
 
 export function getLevelTotalWeight(level: Level): number {
-  return level.subjects.reduce((sum, sub) => sum + getSubjectWeight(sub), 0);
+  return level.subjects.reduce((sum, sub) => {
+    const target = sub.targetWeight !== undefined && sub.targetWeight > 0 ? sub.targetWeight : getSubjectWeight(sub);
+    return sum + target;
+  }, 0);
 }
 
 export interface PaperStyle {

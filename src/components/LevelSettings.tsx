@@ -168,6 +168,9 @@ export default function LevelSettings({ level, onUpdateLevel, onClose, hideHeade
                   }`} title={subject.targetWeight !== undefined && subjectWeight !== subject.targetWeight && subjectWeight !== 100 ? 'Warning: Actual sum of categories does not match target weight (should equal target weight or 100%)' : 'Actual sum of categories'}>
                     {subjectWeight}% Actual
                   </span>
+                  <span className="text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap bg-blue-50 text-blue-700 border border-blue-200" title="Each subject is scored out of 100% before applying target weights">
+                    100% Subject Score
+                  </span>
                   <button
                     onClick={() => handleDeleteSubject(subject.id)}
                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Settings, Plus, Download, Calculator, GraduationCap, Users, FolderOpen, Save, FileSpreadsheet, FileText, Search, Maximize, Minimize, Pin, LogOut, Trash2, Edit2 } from 'lucide-react';
+import { Settings, Plus, Download, Calculator, GraduationCap, Users, FolderOpen, Save, FileSpreadsheet, FileText, Search, Maximize, Minimize, Pin, LogOut, Trash2, Edit2, Copy, Lock, Sparkles } from 'lucide-react';
 import { Level, Student, ClassRecord, getLevelTotalWeight, calculateGrade, PAPER_STYLES, WALLPAPERS } from './types';
 import SettingsModal from './components/SettingsModal';
 import GradeTable from './components/GradeTable';
@@ -7,6 +7,19 @@ import { exportToExcel, exportToPDF } from './lib/exportUtils';
 import { auth, googleProvider } from './lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { subscribeToLevels, subscribeToClasses, saveLevel, saveClassRecord, deleteClassRecordRef, deleteLevel } from './lib/firestoreUtils';
+
+const SAMPLE_TEACHERS = [
+  'Davina',
+  'Sek Sokha',
+  'Sok Sopheap',
+  'Chan Srey',
+  'Keo Sarath',
+  'Nguon Vanna',
+  'Ouk Davin',
+  'Seng Dara',
+  'Tep Bopha',
+  'DPS Admin'
+];
 
 const DEFAULT_LEVELS: Level[] = [
   { id: 'l1', name: 'Foundation 1', subjects: [{ id: 's1', name: 'Listening', categories: [{ id: 'c1', name: 'Quizzes', weight: 5, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] }, { id: 'c2', name: 'Assignment', weight: 20, itemCount: 2, itemMaxScores: [100, 100] }] }] },
@@ -54,6 +67,19 @@ export default function App() {
     return (localStorage.getItem('gradecalc_result_mode') as 'full' | 'midterm' | 'final') || 'full';
   });
 
+  const [accessCode, setAccessCode] = useState<string>(() => {
+    return localStorage.getItem('gradecalc_access_code') || '';
+  });
+
+  // Template / Duplication Modal State
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateClassName, setTemplateClassName] = useState('');
+  const [templateTermName, setTemplateTermName] = useState('');
+  const [templateTeacherName, setTemplateTeacherName] = useState('');
+  const [templateLevelId, setTemplateLevelId] = useState('');
+  const [templateRosterOption, setTemplateRosterOption] = useState<'empty' | 'copy_names' | 'copy_all'>('copy_names');
+  const [templateAccessCode, setTemplateAccessCode] = useState('');
+
   const handleUpdateResultMode = (mode: 'full' | 'midterm' | 'final') => {
     setResultMode(mode);
     localStorage.setItem('gradecalc_result_mode', mode);
@@ -67,6 +93,11 @@ export default function App() {
   const handleUpdateWallpaper = (wp: string) => {
     setWallpaper(wp);
     localStorage.setItem('gradecalc_wallpaper', wp);
+  };
+
+  const handleUpdateAccessCode = (code: string) => {
+    setAccessCode(code);
+    localStorage.setItem('gradecalc_access_code', code);
   };
 
   const togglePin = (id: string) => {
@@ -129,21 +160,38 @@ export default function App() {
 
   const filteredRecords = useMemo(() => {
     const query = searchQuery.toLowerCase();
+    const code = accessCode.trim().toLowerCase();
+    const isAdmin = code === 'dps';
+
     const filtered = classRecords.map(cr => ({
       ...cr,
       isPinned: pinnedIds.includes(cr.id)
-    })).filter(cr => 
-      cr.className.toLowerCase().includes(query) ||
-      cr.teacherName.toLowerCase().includes(query) ||
-      cr.termName.toLowerCase().includes(query) ||
-      (levels.find(l => l.id === cr.levelId)?.name.toLowerCase() || '').includes(query)
-    );
+    })).filter(cr => {
+      // Access Code Filter:
+      // If code is empty, we show all classes.
+      // If code is 'dps', we show all classes (Admin override).
+      // Otherwise, we only show classes where the teacher name or class record access code matches.
+      if (code && !isAdmin) {
+        const matchesTeacher = (cr.teacherName || '').toLowerCase().includes(code);
+        const matchesClassCode = (cr.accessCode || '').toLowerCase() === code;
+        if (!matchesTeacher && !matchesClassCode) return false;
+      }
+
+      // Search Query Filter
+      return (
+        cr.className.toLowerCase().includes(query) ||
+        cr.teacherName.toLowerCase().includes(query) ||
+        cr.termName.toLowerCase().includes(query) ||
+        (levels.find(l => l.id === cr.levelId)?.name.toLowerCase() || '').includes(query)
+      );
+    });
+
     return filtered.sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
       return a.className.localeCompare(b.className);
     });
-  }, [classRecords, levels, searchQuery, pinnedIds]);
+  }, [classRecords, levels, searchQuery, pinnedIds, accessCode]);
 
   const currentRecord = classRecords.find(cr => cr.id === currentRecordId) || classRecords[0];
   const currentLevel = levels.find(l => l.id === currentRecord?.levelId) || levels[0];
@@ -170,14 +218,57 @@ export default function App() {
     if (!user || levels.length === 0) return;
     const newRecord: ClassRecord = {
       id: Math.random().toString(36).substr(2, 9),
-      termName: 'New Term',
-      className: 'New Class',
+      termName: 'Term 1, 2026',
+      className: 'New Class Profile',
       teacherName: user.displayName || 'Teacher Name',
       levelId: levels[0].id,
-      students: []
+      students: [],
+      accessCode: ''
     };
     saveClassRecord(user.uid, newRecord);
     setCurrentRecordId(newRecord.id);
+  };
+
+  const handleOpenTemplateModal = () => {
+    if (!currentRecord) return;
+    setTemplateClassName(currentRecord.className + ' (Copy)');
+    setTemplateTermName(currentRecord.termName);
+    setTemplateTeacherName(currentRecord.teacherName);
+    setTemplateLevelId(currentRecord.levelId);
+    setTemplateAccessCode(currentRecord.accessCode || '');
+    setTemplateRosterOption('copy_names');
+    setShowTemplateModal(true);
+  };
+
+  const handleCreateFromTemplate = () => {
+    if (!user || !currentRecord) return;
+    
+    let newStudents: Student[] = [];
+    if (templateRosterOption === 'copy_all') {
+      newStudents = JSON.parse(JSON.stringify(currentRecord.students));
+    } else if (templateRosterOption === 'copy_names') {
+      newStudents = currentRecord.students.map(s => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name: s.name,
+        scores: {},
+        attendance: '',
+        comment: ''
+      }));
+    }
+
+    const newRecord: ClassRecord = {
+      id: Math.random().toString(36).substr(2, 9),
+      termName: templateTermName.trim() || 'New Term',
+      className: templateClassName.trim() || 'New Class',
+      teacherName: templateTeacherName.trim() || 'Teacher Name',
+      levelId: templateLevelId || currentLevel.id,
+      students: newStudents,
+      accessCode: templateAccessCode.trim() || undefined
+    };
+
+    saveClassRecord(user.uid, newRecord);
+    setCurrentRecordId(newRecord.id);
+    setShowTemplateModal(false);
   };
 
   const handleCreateLevel = () => {
@@ -359,6 +450,26 @@ export default function App() {
           </div>
           
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full lg:w-auto">
+            {/* Teacher Code / Unlock */}
+            <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200 shrink-0">
+              <div className="flex items-center px-2 text-slate-500" title="Enter Teacher Code or DPS for Admin override">
+                <Lock className="w-3.5 h-3.5 mr-1" />
+                <span className="text-xs font-semibold whitespace-nowrap">My Code:</span>
+              </div>
+              <input
+                type="text"
+                placeholder="e.g. Davina"
+                value={accessCode}
+                onChange={(e) => handleUpdateAccessCode(e.target.value)}
+                className="bg-transparent border-0 focus:ring-0 text-sm w-24 outline-none font-medium text-slate-800 uppercase"
+              />
+              {accessCode.toUpperCase() === 'DPS' && (
+                <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded ml-1 animate-pulse" title="Admin Mode overrides all codes">
+                  DPS ADMIN
+                </span>
+              )}
+            </div>
+
             {/* Search and Class Selector */}
             <div className="flex flex-1 md:flex-none items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
               <div className="flex items-center px-2 text-slate-400">
@@ -457,6 +568,15 @@ export default function App() {
               </div>
 
               <button
+                onClick={handleOpenTemplateModal}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-purple-300 transition-all border border-slate-300 rounded-lg bg-white shrink-0"
+                title="Use current class structure as template or duplicate class"
+              >
+                <Copy className="w-4 h-4 text-purple-600" />
+                <span>Use as Template</span>
+              </button>
+
+              <button
                 onClick={handleAddStudent}
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 border border-transparent"
               >
@@ -508,10 +628,29 @@ export default function App() {
               </div>
               <input 
                 type="text" 
+                list="sample-teachers"
                 value={currentRecord.teacherName} 
                 onChange={e => handleUpdateCurrentRecord('teacherName', e.target.value)}
                 className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors"
                 placeholder="Teacher Name"
+              />
+              <datalist id="sample-teachers">
+                {SAMPLE_TEACHERS.map(t => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </div>
+          </div>
+          <div className="flex-1 min-w-[140px] sm:min-w-[200px]">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Class Lock Code</label>
+            <div className="flex items-center gap-2 relative">
+              <Lock className="w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                value={currentRecord.accessCode || ''} 
+                onChange={e => handleUpdateCurrentRecord('accessCode', e.target.value)}
+                className="w-full text-base font-semibold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent px-1 py-0.5 transition-colors uppercase"
+                placeholder="e.g. DAVINA"
               />
             </div>
           </div>
@@ -550,6 +689,140 @@ export default function App() {
           />
         )}
 
+        {/* Template Duplication Modal */}
+        {showTemplateModal && (
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in duration-200">
+              <div className="p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  Create Class from Template
+                </h3>
+                <button onClick={() => setShowTemplateModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">X</button>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-slate-500">
+                  Instantly duplicate this class setup to another teacher, rename it, and select a new target level profile! This saves a tremendous amount of time.
+                </p>
+                
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">New Class Name</label>
+                  <input 
+                    type="text" 
+                    value={templateClassName} 
+                    onChange={e => setTemplateClassName(e.target.value)}
+                    placeholder="e.g. Foundation 2 Class B"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">New Term Name</label>
+                    <input 
+                      type="text" 
+                      value={templateTermName} 
+                      onChange={e => setTemplateTermName(e.target.value)}
+                      placeholder="e.g. Term 3, 2026"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Teacher</label>
+                    <input 
+                      type="text" 
+                      list="sample-teachers"
+                      value={templateTeacherName} 
+                      onChange={e => setTemplateTeacherName(e.target.value)}
+                      placeholder="Teacher Name"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Level Profile</label>
+                    <select
+                      value={templateLevelId}
+                      onChange={e => setTemplateLevelId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                    >
+                      {levels.map(l => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Lock Code</label>
+                    <input 
+                      type="text" 
+                      value={templateAccessCode} 
+                      onChange={e => setTemplateAccessCode(e.target.value)}
+                      placeholder="e.g. DAVINA"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Student Roster Options</label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="roster_option" 
+                        value="copy_names" 
+                        checked={templateRosterOption === 'copy_names'} 
+                        onChange={() => setTemplateRosterOption('copy_names')}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-slate-700">Duplicate student list but <strong>clear grades to 0</strong> (Recommended Template)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="roster_option" 
+                        value="copy_all" 
+                        checked={templateRosterOption === 'copy_all'} 
+                        onChange={() => setTemplateRosterOption('copy_all')}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-slate-700">Duplicate student list <strong>with all current grades</strong></span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="roster_option" 
+                        value="empty" 
+                        checked={templateRosterOption === 'empty'} 
+                        onChange={() => setTemplateRosterOption('empty')}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-slate-700">Create class with an <strong>empty student roster</strong></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+                <button 
+                  onClick={() => setShowTemplateModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleCreateFromTemplate}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create From Template
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div 
           className={`shadow-sm border overflow-hidden flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 rounded-none h-screen' : 'rounded-xl flex-1 min-h-[400px]'} ${currentPaper.bgClass} ${currentPaper.borderClass} ${currentPaper.textClass}`}
           style={currentPaper.customStyle}
@@ -580,7 +853,7 @@ export default function App() {
             </div>
           </div>
           
-          <div className="flex-1 overflow-auto bg-slate-50 relative">
+          <div className="flex-1 overflow-auto bg-transparent relative">
             {currentLevel.subjects.length > 0 ? (
               <GradeTable
                 level={currentLevel}
@@ -590,6 +863,7 @@ export default function App() {
                 onUpdateStudentField={handleUpdateStudentField}
                 onDeleteStudent={handleDeleteStudent}
                 resultMode={resultMode}
+                paperStyle={paperStyle}
               />
             ) : (
               <div className="p-12 text-center flex flex-col items-center justify-center min-h-full">
