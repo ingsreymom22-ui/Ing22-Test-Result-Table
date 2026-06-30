@@ -21,6 +21,22 @@ const SAMPLE_TEACHERS = [
   'DPS Admin'
 ];
 
+const SAMPLE_5_SUBJECTS: Level = {
+  id: 'sample_5_subj',
+  name: 'Sample 5 Subjects (20% each)',
+  subjects: ['Reading', 'Listening', 'Speaking', 'Grammar', 'Vocabulary'].map((name, i) => ({
+    id: `s_sample_${i}`,
+    name,
+    targetWeight: 20,
+    categories: [
+      { id: `c_cp_${i}`, name: 'Class Participation', weight: 10, itemCount: 1, itemMaxScores: [100] },
+      { id: `c_ass_${i}`, name: 'Assignment', weight: 10, itemCount: 1, itemMaxScores: [100] },
+      { id: `c_mid_${i}`, name: 'Midterm', weight: 30, itemCount: 1, itemMaxScores: [100] },
+      { id: `c_fin_${i}`, name: 'Final', weight: 50, itemCount: 1, itemMaxScores: [100] },
+    ]
+  }))
+};
+
 const DEFAULT_LEVELS: Level[] = [
   { id: 'l1', name: 'Foundation 1', subjects: [{ id: 's1', name: 'Listening', categories: [{ id: 'c1', name: 'Quizzes', weight: 5, itemCount: 5, itemMaxScores: [100, 100, 100, 100, 100] }, { id: 'c2', name: 'Assignment', weight: 20, itemCount: 2, itemMaxScores: [100, 100] }] }] },
   { id: 'l2', name: 'Foundation 2', subjects: [] },
@@ -138,6 +154,46 @@ export default function App() {
       unsubClasses();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!user || levels.length === 0) return;
+    const hasSample = levels.some(l => l.id === 'sample_5_subj');
+    if (!hasSample && !localStorage.getItem('gradecalc_sample_template_added')) {
+      const newLevels = [...levels, SAMPLE_5_SUBJECTS];
+      setLevels(newLevels);
+      saveLevel(user.uid, SAMPLE_5_SUBJECTS);
+      localStorage.setItem('gradecalc_sample_template_added', 'true');
+    }
+    
+    // Check if the sample class record exists
+    if (!classRecords.some(cr => cr.levelId === 'sample_5_subj') && !localStorage.getItem('gradecalc_sample_class_added')) {
+      const sampleStudent: Student = {
+        id: 'student_sample_1',
+        name: 'Test Student',
+        scores: {},
+        attendance: '',
+        comment: ''
+      };
+      // Populate scores for the test student
+      SAMPLE_5_SUBJECTS.subjects.forEach(subj => {
+        subj.categories.forEach(cat => {
+          sampleStudent.scores[`${subj.id}_${cat.id}_0`] = 100;
+        });
+      });
+      
+      const newClassRecord: ClassRecord = {
+        id: 'cr_sample_test_' + Date.now(),
+        className: 'Sample Testing Class',
+        termName: 'Term 1',
+        teacherName: 'Teacher',
+        levelId: 'sample_5_subj',
+        students: [sampleStudent]
+      };
+      setClassRecords(prev => [...prev, newClassRecord]);
+      saveClassRecord(user.uid, newClassRecord);
+      localStorage.setItem('gradecalc_sample_class_added', 'true');
+    }
+  }, [user, levels, classRecords]);
 
   const handleLogin = async () => {
     try {
